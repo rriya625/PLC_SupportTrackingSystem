@@ -14,10 +14,10 @@ import 'package:package_info_plus/package_info_plus.dart';
 /// - A logo image at the bottom ("Unleash the Beast")
 class LoginScreen extends StatefulWidget {
   /// Controller for the User ID input field
-  final TextEditingController userIdController = TextEditingController(text: '12819');
+  final TextEditingController userIdController = TextEditingController(text: '');
 
   /// Controller for the Password input field
-  final TextEditingController passwordController = TextEditingController(text: '6779');
+  final TextEditingController passwordController = TextEditingController(text: '');
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
