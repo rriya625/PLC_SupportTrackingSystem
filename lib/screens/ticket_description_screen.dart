@@ -1,9 +1,9 @@
-import 'package:test_project/screens/view_activity.dart';
-import 'package:test_project/screens/message_history.dart';
+import 'package:ticket_tracker_app/screens/view_activity.dart';
+import 'package:ticket_tracker_app/screens/message_history.dart';
 import 'send_message_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:test_project/constants.dart';
-import 'package:test_project/screens/api_helper.dart';
+import 'package:ticket_tracker_app/constants.dart';
+import 'package:ticket_tracker_app/screens/api_helper.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';

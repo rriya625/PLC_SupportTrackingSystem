@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:test_project/constants.dart';
-import 'package:test_project/screens/api_helper.dart';
+import 'package:ticket_tracker_app/constants.dart';
+import 'package:ticket_tracker_app/screens/api_helper.dart';
 
 
 class SendMessageScreen extends StatefulWidget {

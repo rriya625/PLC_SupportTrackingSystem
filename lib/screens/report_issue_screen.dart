@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:test_project/screens/api_helper.dart';
-import 'package:test_project/screens/ticket_description_screen.dart';
+import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
 import 'dart:convert';
-import 'package:test_project/constants.dart';
+import 'package:ticket_tracker_app/constants.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 

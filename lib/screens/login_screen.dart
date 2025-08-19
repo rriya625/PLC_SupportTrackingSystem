@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:test_project/constants.dart';
-import 'package:test_project/screens/home_screen.dart';
-import 'package:test_project/screens/api_helper.dart';
+import 'package:ticket_tracker_app/constants.dart';
+import 'package:ticket_tracker_app/screens/home_screen.dart';
+import 'package:ticket_tracker_app/screens/api_helper.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 
