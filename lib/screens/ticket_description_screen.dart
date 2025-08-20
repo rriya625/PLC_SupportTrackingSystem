@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ticket_tracker_app/screens/upload_web.dart';
+import 'dart:html' as html;
 
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
@@ -178,7 +179,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           }
                         },
                         icon: const Icon(Icons.upload_file),
-                        label: const Text('Upload Image'),
+                        label: const Text('Upload Documents'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
@@ -236,7 +237,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                                       Icon(Icons.insert_drive_file, color: Colors.blue[800]),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'File Names',
+                                        'Documents',
                                         style: TextStyle(
                                           color: Colors.blue[800],
                                           fontWeight: FontWeight.w600,
@@ -299,7 +300,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                                         final parentContext = this.context;
                                         await _showImagePreviewDialogOnly(parentContext, ticketKey); // Show the image preview popup
                                       },
-                                      child: const Text('View Images'),
+                                      child: const Text('View/Download Documents'),
                                     ),
                                   ],
                                 );
@@ -321,7 +322,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        child: const Text('View File Names'),
+                        child: const Text('View Documents'),
                       ),
                     ),
                   ],
@@ -500,6 +501,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       print('No video selected.');
     }
   }
+
   void _showMediaPreviewDialog() {
     showDialog(
       context: context,
@@ -609,18 +611,48 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
                 await Future.delayed(const Duration(milliseconds: 100));
 
-                late BuildContext dialogContext;
+                // 🔵 Create custom HTML-style loading spinner (blue + uploading)
+                final loadingDiv = html.DivElement()
+                  ..id = 'custom-upload-loading'
+                  ..style.position = 'fixed'
+                  ..style.top = '0'
+                  ..style.left = '0'
+                  ..style.width = '100%'
+                  ..style.height = '100%'
+                  ..style.backgroundColor = 'rgba(0, 0, 0, 0.6)'
+                  ..style.display = 'flex'
+                  ..style.flexDirection = 'column'
+                  ..style.alignItems = 'center'
+                  ..style.justifyContent = 'center'
+                  ..style.zIndex = '10000';
 
-                // Show loading using captured dialog context
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                  useRootNavigator: true,
-                  builder: (BuildContext ctx) {
-                    dialogContext = ctx;
-                    return const Center(child: CircularProgressIndicator());
-                  },
-                );
+                final spinner = html.DivElement()
+                  ..style.width = '48px'
+                  ..style.height = '48px'
+                  ..style.border = '5px solid #f3f3f3'
+                  ..style.borderTop = '5px solid #2196f3'
+                  ..style.borderRadius = '50%'
+                  ..style.animation = 'spin 1s linear infinite';
+
+                final styleSheet = html.StyleElement()
+                  ..innerHtml = '''
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    ''';
+                html.document.head?.append(styleSheet);
+
+                final message = html.DivElement()
+                  ..text = 'Uploading...'
+                  ..style.color = 'white'
+                  ..style.fontSize = '16px'
+                  ..style.marginTop = '16px'
+                  ..style.textDecoration = 'none';
+
+                loadingDiv.append(spinner);
+                loadingDiv.append(message);
+                html.document.body?.append(loadingDiv);
 
                 try {
                   final response = await APIHelper.uploadFiles(
@@ -631,12 +663,11 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
                   print("📦 Upload done with status ${response.statusCode}");
 
-                  Navigator.of(dialogContext).pop(); // ✅ Guaranteed to close the dialog
+                  html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Remove loading spinner
 
                   if (!context.mounted) return;
 
                   if (response.statusCode == 200) {
-                    // --- BEGIN REPLACEMENT LOGIC ---
                     _attachedImages.clear();
 
                     await showGeneralDialog(
@@ -677,7 +708,6 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                         );
                       },
                     );
-                    // --- END REPLACEMENT LOGIC ---
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Upload failed: ${response.statusCode}')),
@@ -685,7 +715,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                   }
                 } catch (e) {
                   print("❌ Upload error: $e");
-                  Navigator.of(dialogContext).pop(); // ✅ Also close on error
+                  html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Always remove spinner
                   if (!context.mounted) return;
 
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -700,6 +730,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       },
     );
   }
+
   Future<void> _uploadAttachedImages(BuildContext context) async {
     if (_attachedImages.isEmpty) {
       if (!mounted) return;
@@ -748,46 +779,87 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       }
     }
   }
+
   // Shows a simple image preview dialog with just a close button, fetching images from API.
   Future<void> _showImagePreviewDialogOnly(BuildContext context, String ticketKey) async {
     final keyToUse = ticketKey;
-    try {
-      if (keyToUse.isEmpty) {
-        // Don't show snackbar here; handle error after modal is dismissed or by returning a value.
-        return;
+    if (keyToUse.isEmpty) return;
+
+    // Create and show HTML-style overlay for download spinner (matches upload style)
+    final loadingDiv = html.DivElement()
+      ..id = 'download-loading'
+      ..style.position = 'fixed'
+      ..style.top = '0'
+      ..style.left = '0'
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..style.backgroundColor = 'rgba(0, 0, 0, 0.6)'
+      ..style.display = 'flex'
+      ..style.flexDirection = 'column'
+      ..style.alignItems = 'center'
+      ..style.justifyContent = 'center'
+      ..style.zIndex = '10000';
+
+    final spinner = html.DivElement()
+      ..style.width = '48px'
+      ..style.height = '48px'
+      ..style.border = '5px solid #f3f3f3'
+      ..style.borderTop = '5px solid #2196f3'
+      ..style.borderRadius = '50%'
+      ..style.animation = 'spin 1s linear infinite';
+
+    final styleSheet = html.StyleElement()
+      ..innerHtml = '''
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
       }
+    ''';
+    html.document.head?.append(styleSheet);
 
-      print('📸 Fetching images for ticketKey: $keyToUse');
-      final imageDataList = await APIHelper.getDownloadedImages(keyToUse);
-      print("📦 Total images received from API: ${imageDataList.length}");
-      print('🖼️ Retrieved ${imageDataList.length} images');
+    final message = html.DivElement()
+      ..text = 'Downloading...'
+      ..style.color = 'white'
+      ..style.fontSize = '16px'
+      ..style.marginTop = '16px'
+      ..style.textDecoration = 'none';
 
-      if (!mounted) return; // Ensure widget is still mounted
+    loadingDiv.append(spinner);
+    loadingDiv.append(message);
+    html.document.body?.append(loadingDiv);
 
-      // Show an AlertDialog with custom blue header for title
+    try {
+      final imageDataList = await APIHelper.getDownloadedImages(keyToUse).timeout(const Duration(seconds: 60));
+      print("✅ Fetched images: ${imageDataList.length}");
+
+      // Remove spinner before showing dialog
+      html.document.getElementById('download-loading')?.remove();
+
+      if (!context.mounted) return;
+
       await showDialog(
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
             backgroundColor: Theme.of(context).dialogBackgroundColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            // Custom solid blue header for title
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             title: Container(
               color: Colors.blue,
               padding: EdgeInsets.zero,
-              alignment: Alignment.centerLeft,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-                child: Text(
-                  'Downloaded Images',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+                    child: Text(
+                      'Downloaded Images',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
             content: SizedBox(
@@ -796,42 +868,59 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: imageDataList.isEmpty
-                      ? [
-                          Text(
-                            'No valid images to display.',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          )
-                        ]
+                      ? [Text('No valid images to display.', style: Theme.of(context).textTheme.bodyMedium)]
                       : imageDataList.map<Widget>((imageData) {
-                          final fileName = imageData['FileName'] ?? 'Unnamed';
-                          final imageBytes = imageData['Base64Content'];
-                          if (imageBytes is! Uint8List || imageBytes.isEmpty) {
-                            return const SizedBox.shrink();
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(fileName, style: Theme.of(context).textTheme.bodyLarge),
-                                const SizedBox(height: 8),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.memory(imageBytes, height: 200, fit: BoxFit.cover),
-                                ),
-                              ],
+                    final fileName = imageData['FileName'] ?? 'Unnamed';
+                    final imageBytes = imageData['Base64Content'];
+                    if (imageBytes is! Uint8List || imageBytes.isEmpty) return const SizedBox.shrink();
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(fileName, style: Theme.of(context).textTheme.bodyLarge),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              imageBytes,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Image.asset(
+                                  'assets/preview_not_supported.png',
+                                  height: 200,
+                                  fit: BoxFit.cover,
+                                );
+                              },
                             ),
-                          );
-                        }).toList(),
+                          ),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _downloadImage(fileName, imageBytes),
+                              icon: const Icon(Icons.download),
+                              label: const Text('Download'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                ),
+                style: TextButton.styleFrom(foregroundColor: Colors.blue),
                 child: const Text('Close'),
               ),
             ],
@@ -839,8 +928,35 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
         },
       );
     } catch (e) {
-      // Don't show snackbar here; handle error after modal is dismissed or by returning a value.
-      return;
+      print("❌ Error while fetching images: $e");
+      html.document.getElementById('download-loading')?.remove();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load images: $e')),
+        );
+      }
+    } finally {
+      // Ensure spinner is removed even on error
+      html.document.getElementById('download-loading')?.remove();
     }
   }
+  void _downloadImage(String fileName, Uint8List data) {
+    if (kIsWeb) {
+      // ignore: undefined_prefixed_name
+      // ignore: avoid_web_libraries_in_flutter
+
+      final blob = html.Blob([data]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', fileName)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    } else {
+      print("📥 Download on mobile is not implemented yet: $fileName");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download not supported yet on this platform.')),
+      );
+    }
+  }
+
 }
