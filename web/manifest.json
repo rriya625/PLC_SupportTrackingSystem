@@ -1,11 +1,11 @@
 {
-    "name": "test_project",
-    "short_name": "test_project",
+    "name": "PLC Ticket Tracker",
+    "short_name": "PLC Tracker",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Customer Support System",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
