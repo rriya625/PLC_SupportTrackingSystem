@@ -388,6 +388,53 @@ class APIHelper {
     return response;
   }
 
+  /// Uploads files to the API using base64 encoding (Web only).
+  ///
+  /// Parameters:
+  /// - [ticketKey]: Ticket key to associate the files.
+  /// - [prospectKey]: Prospect key.
+  /// - [fileList]: List of maps with 'name' and 'bytes' keys.
+  ///
+  /// Each file map should contain:
+  /// - 'name': The file name
+  /// - 'bytes': The file content as Uint8List
+  ///
+  /// Returns the HTTP response from the API.
+  static Future<http.Response> uploadFilesWeb({
+    required int ticketKey,
+    required int prospectKey,
+    required List<Map<String, dynamic>> fileList,
+  }) async {
+    await ensureValidToken();
+
+    final List<Map<String, dynamic>> fileData = fileList.map((file) {
+      final fileName = file['name'] ?? 'file.bin';
+      final base64String = base64Encode(file['bytes'] as List<int>);
+      return {
+        'sFileName': fileName,
+        'Base64Content': base64String,
+      };
+    }).toList();
+
+    final requestBody = {
+      'TicketKey': ticketKey,
+      'ProspectKey': prospectKey,
+      'FileList': fileData,
+    };
+
+    final response = await http.post(
+      Uri.parse('${Constants.baseUrlData}UploadFiles'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${Constants.accessToken}',
+      },
+      body: jsonEncode(requestBody),
+    );
+
+    return response;
+  }
+
+
   /// Downloads image files attached to a ticket.
   ///
   /// Parameters:

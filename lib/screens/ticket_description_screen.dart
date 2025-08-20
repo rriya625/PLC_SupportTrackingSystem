@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:ticket_tracker_app/screens/upload_web.dart';
 
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
@@ -126,47 +127,55 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (BuildContext context) {
-                              return Wrap(
-                                children: [
-                                  ListTile(
-                                    leading: Icon(Icons.camera_alt),
-                                    title: Text('Take Photo'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickImageFromCamera();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.videocam),
-                                    title: Text('Record Video'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickVideoFromCamera();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.photo_library),
-                                    title: Text('Choose Photo from Gallery'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickImageFromGallery();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.video_library),
-                                    title: Text('Choose Video from Gallery'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickVideoFromGallery();
-                                    },
-                                  ),
-                                ],
-                              );
-                            },
-                          );
+                          print("🌐 kIsWeb is $kIsWeb");
+                          if (kIsWeb) {
+                            // Call the web-specific upload function
+                            pickAndUploadFilesWeb(
+                              ticketKey: int.tryParse(ticketKey) ?? 0,
+                            );
+                          } else {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (BuildContext context) {
+                                return Wrap(
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(Icons.camera_alt),
+                                      title: Text('Take Photo'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickImageFromCamera();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.videocam),
+                                      title: Text('Record Video'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickVideoFromCamera();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.photo_library),
+                                      title: Text('Choose Photo from Gallery'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickImageFromGallery();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.video_library),
+                                      title: Text('Choose Video from Gallery'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickVideoFromGallery();
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          }
                         },
                         icon: const Icon(Icons.upload_file),
                         label: const Text('Upload Image'),
