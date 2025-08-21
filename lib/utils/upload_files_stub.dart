@@ -23,7 +23,6 @@ void downloadImage(BuildContext context, String fileName, Uint8List data) {
 
 void pickFilesForWeb({
   required List<Map<String, dynamic>> pendingFiles,
-  required List<dynamic> attachedImages,
   required VoidCallback updateUI,
 }) {
   print("📱 pickFilesForWeb is not supported on mobile");

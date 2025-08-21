@@ -104,7 +104,6 @@ void downloadImage(BuildContext context, String fileName, Uint8List data) {
 
 void pickFilesForWeb({
   required List<Map<String, dynamic>> pendingFiles,
-  required List<dynamic> attachedImages,
   required VoidCallback updateUI,
 }) {
   final input = html.FileUploadInputElement();
@@ -115,6 +114,8 @@ void pickFilesForWeb({
   input.onChange.listen((event) async {
     final files = input.files;
     if (files == null || files.isEmpty) return;
+
+    showUploadSpinner('Preparing preview...');
 
     for (final file in files) {
       final reader = html.FileReader();
@@ -128,11 +129,10 @@ void pickFilesForWeb({
         'sFileName': file.name,
         'Base64Content': base64,
       });
-
-      attachedImages.add(fileBytes); // ✅ This is the key fix
     }
 
-    updateUI(); // Trigger setState in ReportIssueScreen
+    hideUploadSpinner();
+    updateUI();
   });
 }
 

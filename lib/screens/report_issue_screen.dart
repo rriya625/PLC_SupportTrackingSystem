@@ -209,14 +209,17 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         if (kIsWeb) {
+                          //showUploadSpinner('Preparing preview...');
                           pickFilesForWeb(
                             pendingFiles: _pendingWebFiles,
-                            attachedImages: _attachedImages,
                             updateUI: () {
                               setState(() {});
                               print("🧩 Files picked for web upload: ${_pendingWebFiles.length}");
                               for (var file in _pendingWebFiles) {
                                 print("📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes");
+                              }
+                              if (mounted) {
+                                _showWebFilesPreviewDialog();
                               }
                             },
                           );
@@ -275,12 +278,31 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              if (_attachedImages.isNotEmpty)
+              if (_attachedImages.isNotEmpty || _pendingWebFiles.isNotEmpty)
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Images Attached: ${_attachedImages.length}'),
+                  child: GestureDetector(
+                    onTap: () {
+                      if (kIsWeb) {
+                        _showWebFilesPreviewDialog();
+                      } else {
+                        _showMediaPreviewDialogOnly(context);
+                      }
+                    },
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: Text(
+                        kIsWeb
+                            ? 'Files Attached: ${_pendingWebFiles.length}'
+                            : 'Files Attached: ${_attachedImages.length}',
+                        style: const TextStyle(
+                          decoration: TextDecoration.underline,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-
               const SizedBox(height: 24),
 
               // Submit Button
@@ -386,7 +408,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
 
                       hideUploadSpinner();
 
-// ✅ Only navigate now
+                      // ✅ Only navigate now
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Ticket created: #$ticketKey')),
@@ -431,7 +453,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               const SizedBox(height: 30),
 
               // Bottom icon image
-              const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
+              //const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
             ],
           ),
         ),
@@ -585,102 +607,273 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       print('Gallery access error: $e');
     }
   }
+
   // Show media preview dialog similar to ticket_description_screen.dart
   Future<void> _showMediaPreviewDialogOnly(BuildContext parentContext) async {
     await showDialog(
       context: parentContext,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Attached Files'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView(
-              shrinkWrap: true,
-              children: _attachedImages.map<Widget>((item) {
-                final isVideo = item is File && item.path.toLowerCase().endsWith('.mp4');
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item is File ? item.path.split('/').last : 'Image',
-                        style: Theme.of(context).textTheme.bodyLarge,
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Attached Files'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _attachedImages.map<Widget>((item) {
+                    final bool isFile = item is File;
+                    final String fileName = isFile
+                        ? item.path.split('/').last
+                        : 'Image';
+
+                    final bool isVideo = isFile &&
+                        item.path.toLowerCase().endsWith('.mp4');
+
+                    final bool isImage = isFile
+                        ? item.path.toLowerCase().endsWith('.png') ||
+                        item.path.toLowerCase().endsWith('.jpg') ||
+                        item.path.toLowerCase().endsWith('.jpeg') ||
+                        item.path.toLowerCase().endsWith('.gif') ||
+                        item.path.toLowerCase().endsWith('.webp')
+                        : item is Uint8List;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            fileName,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: isVideo
+                                ? Container(
+                              height: 200,
+                              color: Colors.black12,
+                              child: const Center(
+                                child: Icon(Icons.videocam,
+                                    size: 50, color: Colors.grey),
+                              ),
+                            )
+                                : isImage
+                                ? (kIsWeb
+                                ? Image.memory(item as Uint8List,
+                                height: 200, fit: BoxFit.cover)
+                                : Image.file(item as File,
+                                height: 200, fit: BoxFit.cover))
+                                : Image.asset(
+                              'assets/preview_not_supported.png',
+                              height: 200,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: isVideo
-                            ? Container(
-                                height: 200,
-                                color: Colors.black12,
-                                child: const Center(
-                                  child: Icon(Icons.videocam, size: 50, color: Colors.grey),
-                                ),
-                              )
-                            : (kIsWeb
-                                ? Image.memory(item as Uint8List, height: 200, fit: BoxFit.cover)
-                                : Image.file(item as File, height: 200, fit: BoxFit.cover)),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return Wrap(
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.camera_alt),
-                          title: const Text('Take Photo'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _pickImageFromCamera();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.videocam),
-                          title: const Text('Record Video'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _pickVideoFromCamera();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.photo_library),
-                          title: const Text('Choose Photo from Gallery'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _pickImageFromGallery();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.video_library),
-                          title: const Text('Choose Video from Gallery'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _pickVideoFromGallery();
-                          },
-                        ),
-                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _attachedImages.clear();
+                    });
+                    setStateDialog(() {});
+                  },
+                  child: const Text('Clear All'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return Wrap(
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.camera_alt),
+                              title: const Text('Take Photo'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                showUploadSpinner('Opening camera...');
+                                await _pickImageFromCamera();
+                                hideUploadSpinner();
+                                setState(() {});
+                                setStateDialog(() {});
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.videocam),
+                              title: const Text('Record Video'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                showUploadSpinner('Opening camera...');
+                                await _pickVideoFromCamera();
+                                hideUploadSpinner();
+                                setState(() {});
+                                setStateDialog(() {});
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.photo_library),
+                              title: const Text('Choose Photo from Gallery'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                showUploadSpinner('Loading gallery...');
+                                await _pickImageFromGallery();
+                                hideUploadSpinner();
+                                setState(() {});
+                                setStateDialog(() {});
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.video_library),
+                              title: const Text('Choose Video from Gallery'),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                showUploadSpinner('Loading gallery...');
+                                await _pickVideoFromGallery();
+                                hideUploadSpinner();
+                                setState(() {});
+                                setStateDialog(() {});
+                              },
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
-                );
-              },
-              child: const Text('Add More'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
+                  child: const Text('Add More'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Checks if the file name looks like an image
+  bool _isImageFile(String name) {
+    final lower = name.toLowerCase();
+    return lower.endsWith('.png') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.gif') ||
+        lower.endsWith('.webp') ||
+        lower.endsWith('.bmp') ||
+        lower.endsWith('.heic') ||
+        lower.endsWith('.heif');
+  }
+
+// Decodes base64 image content safely (used for preview)
+  Uint8List? _decodeBase64ForPreview(String? maybeB64) {
+    if (maybeB64 == null || maybeB64.isEmpty) return null;
+    try {
+      // Strip data:image/...;base64, prefix if included
+      final cleaned = maybeB64.contains(',')
+          ? maybeB64.split(',').last
+          : maybeB64;
+      return base64Decode(cleaned);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _showWebFilesPreviewDialog() async {
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Selected Files'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _pendingWebFiles.map<Widget>((file) {
+                      final name = (file['sFileName'] ?? '').toString();
+                      final base64 = (file['Base64Content'] ?? '').toString();
+                      final isImage = _isImageFile(name);
+                      final Uint8List? bytes = isImage ? _decodeBase64ForPreview(base64) : null;
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // File name
+                            Text(
+                              name.isNotEmpty ? name : 'Unnamed File',
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Thumbnail
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: isImage && bytes != null
+                                  ? Image.memory(bytes, height: 200, fit: BoxFit.cover)
+                                  : Image.asset(
+                                'assets/preview_not_supported.png',
+                                height: 200,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _pendingWebFiles.clear();
+                    });
+                    setStateDialog(() {}); // Refresh the dialog
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('Clear All'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    //showUploadSpinner('Preparing preview...');
+                    pickFilesForWeb(
+                      pendingFiles: _pendingWebFiles,
+                      //attachedImages: _attachedImages,
+                      updateUI: () {
+                        setState(() {});        // update outer UI
+                        setStateDialog(() {});  // refresh dialog contents
+                        //hideUploadSpinner();
+                      },
+                    );
+                  },
+                  child: const Text('Add More'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            );
+          },
         );
       },
     );

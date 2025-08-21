@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/api_helper.dart';
-
+import 'package:ticket_tracker_app/utils/dialogs.dart';
 
 class SendMessageScreen extends StatefulWidget {
   const SendMessageScreen({Key? key}) : super(key: key);
@@ -136,6 +136,10 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
         _selectedMessageTo = _messageToOptions.isNotEmpty ? _messageToOptions.first : null;
       });
       FocusScope.of(context).unfocus();
+      // Wait for the dialog to complete before popping the screen
+      await showMessageDialog(context, 'Your message has been successfully sent to Porter Lee Corporation.');
+      // Go back to the previous screen
+      Navigator.of(context).pop();
     } else {
       print('Failed status: ${response.statusCode}');
       print('Response body: ${response.body}');
@@ -212,7 +216,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                 ),
                 const SizedBox(height: 60),
                 Center(
-                  child: Icon(Icons.message, size: 80, color: Colors.green),
+                  //child: Icon(Icons.message, size: 80, color: Colors.green),
                 ),
               ],
             ),

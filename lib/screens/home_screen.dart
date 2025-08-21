@@ -5,6 +5,11 @@ import 'package:ticket_tracker_app/screens/view_tickets_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:flutter/foundation.dart'; // already present
+import 'dart:io' show Platform;
+import 'package:ticket_tracker_app/utils/dialogs.dart';
+import 'dart:math' as math;
+
 /// Home screen shown after successful login.
 /// Displays navigation buttons and support contact info with branding.
 class HomeScreen extends StatefulWidget {
@@ -35,6 +40,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ? Constants.contactName
           : "User";
     });
+  }
+
+  bool isMobile() {
+    return !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   }
 
   @override
@@ -113,11 +122,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            Image.asset(
-              'assets/beast.png',
-              height: 140,
-              fit: BoxFit.contain,
-            ),
+
+            !isMobile()
+                ? Image.asset(
+                  'assets/beast.png',
+                  height: 140,
+                  fit: BoxFit.contain,
+                )
+                : const SizedBox.shrink(),
             const SizedBox(height: 20),
           ],
         ),
@@ -194,10 +206,14 @@ class _HomeScreenState extends State<HomeScreen> {
           builder: (context, setState) {
             return AlertDialog(
               title: const Text('Change Password'),
+              constraints: BoxConstraints(
+                minWidth: math.min(500.0, MediaQuery.of(context).size.width * 0.6),
+                maxWidth: MediaQuery.of(context).size.width * 0.8,
+              ),
               content: Center(
                 child: SingleChildScrollView(
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: 500),
+                    constraints: BoxConstraints(maxWidth: 600),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -248,12 +264,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     final newPassword = newPasswordController.text.trim();
                     final confirmPassword = confirmPasswordController.text.trim();
 
-                    final passwordPattern = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#\$&*~]).{8,}$');
+                    if (newPassword == currentPassword) {
+                      setState(() => errorText = 'New password cannot be the same as your current password.');
+                      return;
+                    }
+
+                    final passwordPattern = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#\\$&*~]).{8,}$');
                     if (!passwordPattern.hasMatch(newPassword)) {
                       setState(() => errorText = 'Password does not meet requirements.');
                       return;
                     }
-
                     if (newPassword != confirmPassword) {
                       setState(() => errorText = 'New passwords do not match.');
                       return;
@@ -266,8 +286,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         newPassword: newPassword,
                       );
                       if (!context.mounted) return;
-                      if (result.toLowerCase().contains('success')) {
-                        setState(() => errorText = 'Password changed successfully.');
+
+                      if (result.toLowerCase().contains('success') ||
+                          result.toLowerCase().contains('password updated')){
+                        // Show confirmation and close both dialogs
+                        await showMessageDialog(context, 'Password changed successfully.');
+                        if (context.mounted) Navigator.of(context).pop();
                       } else {
                         setState(() => errorText = result);
                       }
