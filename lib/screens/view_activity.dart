@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/api_helper.dart';
 import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
+import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 
 class ViewActivityScreen extends StatefulWidget {
   final String ticketNumber;
@@ -125,43 +126,61 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
                     setState(() {
                       showPriorityError = selectedPriorityCode == null;
                       showMessageError = messageController.text.trim().isEmpty;
                     });
 
-                    if (!showPriorityError && !showMessageError) {
-                      final payload = {
-                        "TicketKey": int.tryParse(widget.ticketNumber) ?? 0,
-                        "ProspectKey": Constants.userID,
-                        "LongDesc": messageController.text.trim(),
-                        "Priority": selectedPriorityCode!,
-                        "Critical": isCritical ? "Y" : "N",
-                      };
+                    if (showPriorityError || showMessageError) return;
 
-                      final url = Uri.parse('${Constants.baseUrlData}CreateActivity');
+                    showUploadSpinner('Creating activity...');
 
-                      http.post(
+                    final payload = {
+                      "TicketKey": int.tryParse(widget.ticketNumber) ?? 0,
+                      "ProspectKey": Constants.userID,
+                      "LongDesc": messageController.text.trim(),
+                      "Priority": selectedPriorityCode!,
+                      "Critical": isCritical ? "Y" : "N",
+                    };
+
+                    final url = Uri.parse('${Constants.baseUrlData}CreateActivity');
+
+                    try {
+                      final response = await http.post(
                         url,
                         headers: {
                           'Authorization': 'Bearer ${Constants.accessToken}',
                           'Content-Type': 'application/json',
                         },
                         body: jsonEncode(payload),
-                      ).then((response) {
-                        if (response.statusCode == 200) {
-                          Navigator.pop(context);
-                          fetchActivityData(); // refresh activity list
-                        } else {
-                          debugPrint('Failed to create activity: ${response.statusCode}');
-                          debugPrint('Response body: ${response.body}');
-                          debugPrint('URL: ${url.toString()}');
-                          debugPrint('Payload: ${jsonEncode(payload)}');
+                      );
+
+                      if (response.statusCode == 200) {
+                        if (!context.mounted) return;
+                        hideUploadSpinner();
+                        Navigator.pop(context);
+                        fetchActivityData(); // ✅ Refresh list
+                      } else {
+                        debugPrint('❌ Failed to create activity: ${response.statusCode}');
+                        debugPrint('Body: ${response.body}');
+                        debugPrint('Payload: ${jsonEncode(payload)}');
+                        debugPrint('URL: ${url.toString()}');
+                        if (context.mounted) {
+                          hideUploadSpinner();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to create activity.')),
+                          );
                         }
-                      }).catchError((e) {
-                        debugPrint('Error posting activity: $e');
-                      });
+                      }
+                    } catch (e) {
+                      debugPrint('❌ Error posting activity: $e');
+                      if (context.mounted) {
+                        hideUploadSpinner();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error posting activity: $e')),
+                        );
+                      }
                     }
                   },
                   style: TextButton.styleFrom(

@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:ticket_tracker_app/constants.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:ticket_tracker_app/utils/spinner_helper.dart';
+import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
 
 /// Report Issue screen for creating a new support ticket.
 class ReportIssueScreen extends StatefulWidget {
@@ -18,6 +20,7 @@ class ReportIssueScreen extends StatefulWidget {
 
 class _ReportIssueScreenState extends State<ReportIssueScreen> {
   List<String> _priorityOptions = [];
+  List<Map<String, dynamic>> _pendingWebFiles = [];
   String _selectedPriority = 'Normal';
 
   final _shortDescController = TextEditingController();
@@ -205,47 +208,61 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          builder: (BuildContext context) {
-                            return Wrap(
-                              children: [
-                                ListTile(
-                                  leading: Icon(Icons.camera_alt),
-                                  title: Text('Take Photo'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    _pickImageFromCamera();
-                                  },
-                                ),
-                                ListTile(
-                                  leading: Icon(Icons.videocam),
-                                  title: Text('Record Video'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    _pickVideoFromCamera();
-                                  },
-                                ),
-                                ListTile(
-                                  leading: Icon(Icons.photo_library),
-                                  title: Text('Choose Photo from Gallery'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    _pickImageFromGallery();
-                                  },
-                                ),
-                                ListTile(
-                                  leading: Icon(Icons.video_library),
-                                  title: Text('Choose Video from Gallery'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    _pickVideoFromGallery();
-                                  },
-                                ),
-                              ],
-                            );
-                          },
-                        );
+                        if (kIsWeb) {
+                          pickFilesForWeb(
+                            pendingFiles: _pendingWebFiles,
+                            attachedImages: _attachedImages,
+                            updateUI: () {
+                              setState(() {});
+                              print("🧩 Files picked for web upload: ${_pendingWebFiles.length}");
+                              for (var file in _pendingWebFiles) {
+                                print("📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes");
+                              }
+                            },
+                          );
+                        } else {
+                          showModalBottomSheet(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return Wrap(
+                                children: [
+                                  ListTile(
+                                    leading: Icon(Icons.camera_alt),
+                                    title: Text('Take Photo'),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _pickImageFromCamera();
+                                    },
+                                  ),
+                                  ListTile(
+                                    leading: Icon(Icons.videocam),
+                                    title: Text('Record Video'),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _pickVideoFromCamera();
+                                    },
+                                  ),
+                                  ListTile(
+                                    leading: Icon(Icons.photo_library),
+                                    title: Text('Choose Photo from Gallery'),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _pickImageFromGallery();
+                                    },
+                                  ),
+                                  ListTile(
+                                    leading: Icon(Icons.video_library),
+                                    title: Text('Choose Video from Gallery'),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      _pickVideoFromGallery();
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.lightBlueAccent,
@@ -271,25 +288,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (BuildContext context) {
-                        return Dialog(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                CircularProgressIndicator(),
-                                SizedBox(width: 16),
-                                Text("Uploading ticket and files..."),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
+                    showUploadSpinner('Uploading ticket and files...');
+
                     final shortDesc = _shortDescController.text.trim();
                     final longDesc = _detailedDescController.text.trim();
 
@@ -321,121 +321,84 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       print('Create Ticket Response: $response');
 
                       final ticketKey = response['Ticket Key'];
+
                       // Upload attached images to the created ticket
-                      if (_attachedImages.isNotEmpty && !kIsWeb) {
-                        final filesToUpload = _attachedImages.whereType<File>().toList();
-                        final response = await APIHelper.uploadFiles(
-                          ticketKey: int.parse(ticketKey.toString()),
-                          prospectKey: Constants.userID,
-                          fileList: filesToUpload,
-                        );
-                        if (!context.mounted) return;
 
-                        print('Upload Files Response: ${response.statusCode} ${response.body}');
-
-                        Future.microtask(() async {
-                          if (!context.mounted) return;
-                          Navigator.of(context).pop();
-
-                          // Minimal fallback dialog for constrained UI environments
-                          if (!context.mounted) return;
-                          await showDialog(
-                            context: context,
-                            useRootNavigator: true,
-                            builder: (BuildContext context) {
-                              return AlertDialog(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                content: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      response.statusCode == 200 ? Icons.check_circle : Icons.error,
-                                      color: response.statusCode == 200 ? Colors.green : Colors.red,
-                                      size: 60,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      response.statusCode == 200
-                                          ? 'Upload successful'
-                                          : 'Upload failed: ${response.statusCode}',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 16),
-                                    ),
-                                  ],
-                                ),
-                                actions: [
-                                  // Attach More button
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                      showModalBottomSheet(
-                                        context: context,
-                                        builder: (BuildContext context) {
-                                          return Wrap(
-                                            children: [
-                                              ListTile(
-                                                leading: const Icon(Icons.camera_alt),
-                                                title: const Text('Take Photo'),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                  _pickImageFromCamera();
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(Icons.videocam),
-                                                title: const Text('Record Video'),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                  _pickVideoFromCamera();
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(Icons.photo_library),
-                                                title: const Text('Choose Photo from Gallery'),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                  _pickImageFromGallery();
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(Icons.video_library),
-                                                title: const Text('Choose Video from Gallery'),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                  _pickVideoFromGallery();
-                                                },
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                    },
-                                    child: const Text('Attach More'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(),
-                                    child: const Text('OK'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        });
-                        setState(() => _attachedImages.clear());
+                      //print("🎫 Ticket Key: $ticketKey");
+                      try {
+                        //final ticketKey = response['Ticket Key'];
+                        print("🎫 Ticket Key: $ticketKey");
+                        print("📂 Pending web files count: ${_pendingWebFiles.length}");
+                        for (var file in _pendingWebFiles) {
+                          print("📄 Queued file: ${file['sFileName']} | Base64 Length: ${file['Base64Content']?.length ?? 0}");
+                        }
+                      } catch (e) {
+                        print("❌ Error while processing ticketKey or logging: $e");
                       }
 
-                      Navigator.of(context, rootNavigator: true).pop();
-                      // Only show SnackBar and navigate after any image upload completes
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Ticket created: #$ticketKey')),
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const TicketDescriptionScreenStateful(),
-                          settings: RouteSettings(arguments: ticketKey.toString()),
-                        ),
-                      );
+                      print("🧪 _attachedImages.isNotEmpty: ${_attachedImages.isNotEmpty}");
+                      print("🧪 _pendingWebFiles.isNotEmpty: ${_pendingWebFiles.isNotEmpty}");
+                      print("🧪 kIsWeb: $kIsWeb");
+
+                      if (_attachedImages.isNotEmpty || (kIsWeb && _pendingWebFiles.isNotEmpty)) {
+                        try {
+                          print("try upload ....");
+                          if (kIsWeb) {
+                            if (_pendingWebFiles.isEmpty) {
+                              hideUploadSpinner();
+                              return;
+                            }
+
+                            print("🚀 Calling uploadPickedFilesWeb...");
+                            await uploadPickedFilesWeb(
+                              int.parse(ticketKey.toString()),
+                              _pendingWebFiles,
+                            );
+                            print("✅ Finished uploadPickedFilesWeb");
+
+                            _pendingWebFiles.clear();
+
+                            if (context.mounted) {
+                              await _showUploadResultDialog(context, 200);
+                            }
+                          } else {
+                            final filesToUpload = _attachedImages.whereType<File>().toList();
+
+                            final response = await APIHelper.uploadFiles(
+                              ticketKey: int.parse(ticketKey.toString()),
+                              prospectKey: Constants.userID,
+                              fileList: filesToUpload,
+                            );
+
+                            if (context.mounted) {
+                              await _showUploadResultDialog(context, response.statusCode);
+                            }
+                          }
+
+                          setState(() => _attachedImages.clear());
+                        } catch (e) {
+                          print('try catch $e');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('File upload failed: $e')),
+                          );
+                        }
+                      }
+
+                      hideUploadSpinner();
+
+// ✅ Only navigate now
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Ticket created: #$ticketKey')),
+                        );
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TicketDescriptionScreenStateful(),
+                            settings: RouteSettings(arguments: ticketKey.toString()),
+                          ),
+                        );
+                      }
 
                       // Clear fields after successful submission
                       setState(() {
@@ -510,6 +473,42 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     );
   }
 
+  Future<void> _showUploadResultDialog(BuildContext context, int statusCode) async {
+    await showDialog(
+      context: context,
+      useRootNavigator: true,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                statusCode == 200 ? Icons.check_circle : Icons.error,
+                color: statusCode == 200 ? Colors.green : Colors.red,
+                size: 60,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                statusCode == 200
+                    ? 'Upload successful'
+                    : 'Upload failed: $statusCode',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   /// Creates a styled dropdown field.
   Widget _buildDropdownField({
     required String label,
@@ -544,6 +543,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       ],
     );
   }
+
   Future<void> _pickVideoFromCamera() async {
     try {
       final pickedFile = await _picker.pickVideo(source: ImageSource.camera);

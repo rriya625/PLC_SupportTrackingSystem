@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'constants.dart';
 import 'screens/login_screen.dart';
+import 'utils/spinner_helper.dart'; // ⬅️ Add this import to access rootNavigatorKey
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Customer Support System',
       debugShowCheckedModeBanner: false,
+      navigatorKey: rootNavigatorKey, // ✅ This enables global dialog access
       home: LoginScreen(),
     );
   }

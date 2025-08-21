@@ -44,7 +44,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                 ),
               ),
             );
-          },
+            },
         );
       });
       final data = await APIHelper.fetchTickets(

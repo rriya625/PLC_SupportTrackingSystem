@@ -10,9 +10,9 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
-import 'package:ticket_tracker_app/screens/upload_web.dart';
-import 'dart:html' as html;
-
+//import 'package:ticket_tracker_app/screens/upload_web.dart';
+import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
+import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
   const TicketDescriptionScreenStateful({Key? key}) : super(key: key);
@@ -202,20 +202,14 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             }
 
                             // Show loading dialog before API call
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (_) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
+                            showUploadSpinner('Loading Customer Documents...');
 
                             // Await API call to get file list
                             final files = await APIHelper.getCustomerDocsList(key);
 
                             // Dismiss loading dialog after API response
                             if (mounted) {
-                              Navigator.of(context, rootNavigator: true).pop();
+                               hideUploadSpinner();
                             }
 
                             if (!mounted) return;
@@ -308,7 +302,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             );
                           } catch (e) {
                             if (mounted) {
-                              Navigator.of(context, rootNavigator: true).pop();
+                              hideUploadSpinner();
                             }
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -611,48 +605,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
                 await Future.delayed(const Duration(milliseconds: 100));
 
-                // 🔵 Create custom HTML-style loading spinner (blue + uploading)
-                final loadingDiv = html.DivElement()
-                  ..id = 'custom-upload-loading'
-                  ..style.position = 'fixed'
-                  ..style.top = '0'
-                  ..style.left = '0'
-                  ..style.width = '100%'
-                  ..style.height = '100%'
-                  ..style.backgroundColor = 'rgba(0, 0, 0, 0.6)'
-                  ..style.display = 'flex'
-                  ..style.flexDirection = 'column'
-                  ..style.alignItems = 'center'
-                  ..style.justifyContent = 'center'
-                  ..style.zIndex = '10000';
-
-                final spinner = html.DivElement()
-                  ..style.width = '48px'
-                  ..style.height = '48px'
-                  ..style.border = '5px solid #f3f3f3'
-                  ..style.borderTop = '5px solid #2196f3'
-                  ..style.borderRadius = '50%'
-                  ..style.animation = 'spin 1s linear infinite';
-
-                final styleSheet = html.StyleElement()
-                  ..innerHtml = '''
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    ''';
-                html.document.head?.append(styleSheet);
-
-                final message = html.DivElement()
-                  ..text = 'Uploading...'
-                  ..style.color = 'white'
-                  ..style.fontSize = '16px'
-                  ..style.marginTop = '16px'
-                  ..style.textDecoration = 'none';
-
-                loadingDiv.append(spinner);
-                loadingDiv.append(message);
-                html.document.body?.append(loadingDiv);
+                showUploadSpinner('Uploading...');
 
                 try {
                   final response = await APIHelper.uploadFiles(
@@ -663,7 +616,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
                   print("📦 Upload done with status ${response.statusCode}");
 
-                  html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Remove loading spinner
+                  //html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Remove loading spinner
+                  hideUploadSpinner();
 
                   if (!context.mounted) return;
 
@@ -715,7 +669,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                   }
                 } catch (e) {
                   print("❌ Upload error: $e");
-                  html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Always remove spinner
+                  hideUploadSpinner();
+                  //html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Always remove spinner
                   if (!context.mounted) return;
 
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -785,55 +740,14 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
     final keyToUse = ticketKey;
     if (keyToUse.isEmpty) return;
 
-    // Create and show HTML-style overlay for download spinner (matches upload style)
-    final loadingDiv = html.DivElement()
-      ..id = 'download-loading'
-      ..style.position = 'fixed'
-      ..style.top = '0'
-      ..style.left = '0'
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.backgroundColor = 'rgba(0, 0, 0, 0.6)'
-      ..style.display = 'flex'
-      ..style.flexDirection = 'column'
-      ..style.alignItems = 'center'
-      ..style.justifyContent = 'center'
-      ..style.zIndex = '10000';
-
-    final spinner = html.DivElement()
-      ..style.width = '48px'
-      ..style.height = '48px'
-      ..style.border = '5px solid #f3f3f3'
-      ..style.borderTop = '5px solid #2196f3'
-      ..style.borderRadius = '50%'
-      ..style.animation = 'spin 1s linear infinite';
-
-    final styleSheet = html.StyleElement()
-      ..innerHtml = '''
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    ''';
-    html.document.head?.append(styleSheet);
-
-    final message = html.DivElement()
-      ..text = 'Downloading...'
-      ..style.color = 'white'
-      ..style.fontSize = '16px'
-      ..style.marginTop = '16px'
-      ..style.textDecoration = 'none';
-
-    loadingDiv.append(spinner);
-    loadingDiv.append(message);
-    html.document.body?.append(loadingDiv);
+    showUploadSpinner('Downloading...');
 
     try {
       final imageDataList = await APIHelper.getDownloadedImages(keyToUse).timeout(const Duration(seconds: 60));
       print("✅ Fetched images: ${imageDataList.length}");
 
       // Remove spinner before showing dialog
-      html.document.getElementById('download-loading')?.remove();
+      hideUploadSpinner();
 
       if (!context.mounted) return;
 
@@ -900,7 +814,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           Align(
                             alignment: Alignment.centerRight,
                             child: ElevatedButton.icon(
-                              onPressed: () => _downloadImage(fileName, imageBytes),
+                              //onPressed: () => _downloadImage(fileName, imageBytes),
+                              onPressed: () => downloadImage(context, fileName, imageBytes),
                               icon: const Icon(Icons.download),
                               label: const Text('Download'),
                               style: ElevatedButton.styleFrom(
@@ -929,7 +844,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       );
     } catch (e) {
       print("❌ Error while fetching images: $e");
-      html.document.getElementById('download-loading')?.remove();
+      hideUploadSpinner();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load images: $e')),
@@ -937,26 +852,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       }
     } finally {
       // Ensure spinner is removed even on error
-      html.document.getElementById('download-loading')?.remove();
+      hideUploadSpinner();
     }
   }
-  void _downloadImage(String fileName, Uint8List data) {
-    if (kIsWeb) {
-      // ignore: undefined_prefixed_name
-      // ignore: avoid_web_libraries_in_flutter
 
-      final blob = html.Blob([data]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', fileName)
-        ..click();
-      html.Url.revokeObjectUrl(url);
-    } else {
-      print("📥 Download on mobile is not implemented yet: $fileName");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download not supported yet on this platform.')),
-      );
-    }
-  }
 
 }
