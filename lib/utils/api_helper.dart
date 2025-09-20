@@ -183,6 +183,7 @@ class APIHelper {
     required String searchValue,
     required String fromDate,
     required String toDate,
+    required String ticketGroupCode,
   }) async {
     await ensureValidToken();
 
@@ -235,7 +236,8 @@ class APIHelper {
           '&SearchBy=${Uri.encodeComponent(searchByMapped.trim())}'
           '&SearchValue=${Uri.encodeComponent(searchValue.trim())}'
           '&DateFrom=${Uri.encodeComponent(fromDate)}'
-          '&DateTo=${Uri.encodeComponent(toDate)}',
+          '&DateTo=${Uri.encodeComponent(toDate)}'
+          '&TicketGroup=${Uri.encodeComponent(ticketGroupCode)}',
     );
 
     try {
@@ -714,4 +716,38 @@ class APIHelper {
       throw Exception('Failed to load $codeTable list');
     }
   }
+
+  static Future<List<Map<String, String>>> getTicketGroupList({
+    required String prospectKey,
+    required String qbLinkKey,
+    required bool useActiveOnly,
+  }) async {
+    await ensureValidToken();
+
+    final useActive = useActiveOnly ? 'Y' : 'N';
+    final url = Uri.parse(
+      '${Constants.baseUrlData}GetTicketGroup'
+          '?ProspectKey=$prospectKey'
+          '&QBLinkKey=$qbLinkKey'
+          '&UseActiveOnly=$useActive',
+    );
+
+    final response = await http.get(url, headers: {
+      'Authorization': 'Bearer ${Constants.accessToken}',
+      'Accept': 'application/json',
+    });
+
+    if (response.statusCode == 200) {
+      final List<dynamic> jsonList = jsonDecode(response.body);
+      return jsonList.map((e) {
+        return {
+          'Code': e['Code'].toString(),
+          'Description': e['Description']?.toString() ?? '',
+        };
+      }).toList();
+    } else {
+      throw Exception('Failed to load ticket groups: ${response.statusCode}');
+    }
+  }
+
 }

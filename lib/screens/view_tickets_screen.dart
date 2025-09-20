@@ -24,6 +24,12 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   DateTime? toDate;
   String? dateErrorText;
 
+  List<Map<String, String>> ticketGroups = [];
+  //List<Map<String, dynamic>> ticketGroups = [];
+  String? selectedTicketGroup;
+  bool useActiveGroupsOnly = true;
+  bool isTicketGroupLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -35,7 +41,47 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
       searchFocusNode.requestFocus();
     });
 
+    _fetchTicketGroups();
     _fetchAndSetTickets();
+  }
+
+  Future<void> _fetchTicketGroups() async {
+    setState(() => isTicketGroupLoading = true);
+    try {
+      final data = await APIHelper.getTicketGroupList(
+        prospectKey: Constants.userID.toString(),
+        qbLinkKey: Constants.qbLinkKey,
+        useActiveOnly: useActiveGroupsOnly,
+      );
+
+      print("Raw ticket group data from API (${data.length} entries):");
+      for (var group in data) {
+        print(" 1 - Code: ${group['Code']}, Description: ${group['Description']}");
+      }
+
+      setState(() {
+        final validGroups = data
+            .where((g) => g['Code'] != null && g['Code'].toString().trim().isNotEmpty)
+            .toList();
+
+        print("Filtered valid ticket groups (${validGroups.length}):");
+        for (var group in validGroups) {
+          print(" - Code: ${group['Code']}, Description: ${group['Description']}");
+        }
+
+        ticketGroups = validGroups;
+
+        selectedTicketGroup ??= validGroups.isNotEmpty
+            ? validGroups.first['Code']?.toString()
+            : null;
+
+        print("Selected ticket group after filtering: $selectedTicketGroup");
+      });
+    } catch (e) {
+      debugPrint('Error fetching ticket groups: $e');
+    } finally {
+      setState(() => isTicketGroupLoading = false);
+    }
   }
 
   Future<void> _pickDate(BuildContext context, bool isFromDate) async {
@@ -114,6 +160,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         searchValue: searchController.text,
         fromDate: fromDate != null ? _formatApiDate(fromDate!) : '',
         toDate: toDate != null ? _formatApiDate(toDate!) : '',
+        ticketGroupCode: selectedTicketGroup ?? '',
       );
       setState(() {
         tickets = data;
@@ -283,6 +330,83 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
             ),
           ),
         const SizedBox(height: 12),
+
+        /// Ticket Group & Active checkbox
+        StatefulBuilder(
+          builder: (context, setLocalState) {
+            print("Selected ticket group: $selectedTicketGroup");
+            print("Available group codes:");
+            for (var g in ticketGroups) {
+              print(" - ${g['Code'] ?? 'null'} (${g['Description'] ?? 'no description'})");
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Ticket Group', style: TextStyle(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: DropdownButton<String>(
+                          value: (selectedTicketGroup != null &&
+                              ticketGroups.any((g) => g['Code'] == selectedTicketGroup))
+                              ? selectedTicketGroup
+                              : null,
+                          isExpanded: true,
+                          underline: const SizedBox(),
+                          hint: const Text('Select Group'),
+                          disabledHint: const Text("Loading..."),
+                          items: ticketGroups.map((group) {
+                            final code = group['Code']?.toString() ?? '';
+                            final desc = group['Description']?.toString() ?? code;
+                            return DropdownMenuItem(
+                              value: code,
+                              child: Text(desc),
+                            );
+                          }).toList(),
+                          onChanged: isTicketGroupLoading
+                              ? null
+                              : (value) => setLocalState(() => selectedTicketGroup = value),
+
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(' '),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: useActiveGroupsOnly,
+                          onChanged: (value) async {
+                            setLocalState(() => useActiveGroupsOnly = value ?? true);
+                            await _fetchTicketGroups();
+                            //setLocalState(() {}); // refreshes dropdown after fetch
+                          },
+                        ),
+                        const Text('Active Groups Only'),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+
+        const SizedBox(height: 12),
+
         Row(
           children: [
             Expanded(child: _buildDropdown('Sort By', ['Last Activity', 'Start Date'], sortBy, (val) => setState(() => sortBy = val!))),
