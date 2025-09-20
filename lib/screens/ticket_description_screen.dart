@@ -3,7 +3,7 @@ import 'package:ticket_tracker_app/screens/message_history.dart';
 import 'send_message_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
-import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 //import 'package:ticket_tracker_app/screens/upload_web.dart';
 import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
+
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
   const TicketDescriptionScreenStateful({Key? key}) : super(key: key);
@@ -378,7 +379,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => ViewActivityScreen(ticketNumber: ticketNumber),
+                          builder: (context) => ViewActivityScreen(ticketNumber: ticketNumber, shortDescription: shortDescription),
                           settings: RouteSettings(arguments: ticketNumber),
                         ),
                       );

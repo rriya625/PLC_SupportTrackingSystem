@@ -181,8 +181,11 @@ class APIHelper {
     required String searchBy,
     required String sortBy,
     required String searchValue,
+    required String fromDate,
+    required String toDate,
   }) async {
     await ensureValidToken();
+
     final searchType = ticketType == 'Yours' ? 'USER' : 'DEPT';
     final userId = searchType == 'USER' ? Constants.userID.toString() : '-1';
     final deptId = Constants.qbLinkKey;
@@ -211,6 +214,17 @@ class APIHelper {
 
     final sortByMapped = sortBy;
 
+    // Validate date format and logic
+    try {
+      final from = DateTime.parse(fromDate);
+      final to = DateTime.parse(toDate);
+      if (from.isAfter(to)) {
+        throw Exception('From Date must not be after To Date');
+      }
+    } catch (e) {
+      throw Exception('Invalid From/To Date: $e');
+    }
+
     final uri = Uri.parse(
       '${Constants.baseUrlData}GetTickets'
           '?SearchType=${Uri.encodeComponent(searchType)}'
@@ -219,7 +233,9 @@ class APIHelper {
           '&Status=${Uri.encodeComponent(statusCode)}'
           '&SortBy=${Uri.encodeComponent(sortByMapped)}'
           '&SearchBy=${Uri.encodeComponent(searchByMapped.trim())}'
-          '&SearchValue=${Uri.encodeComponent(searchValue.trim())}',
+          '&SearchValue=${Uri.encodeComponent(searchValue.trim())}'
+          '&DateFrom=${Uri.encodeComponent(fromDate)}'
+          '&DateTo=${Uri.encodeComponent(toDate)}',
     );
 
     try {

@@ -3,35 +3,36 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
-import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
 
 class SendMessageScreen extends StatefulWidget {
   const SendMessageScreen({Key? key}) : super(key: key);
 
-
   @override
   State<SendMessageScreen> createState() => _SendMessageScreenState();
 }
 
-
 class _SendMessageScreenState extends State<SendMessageScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final FocusNode _messageFocusNode = FocusNode(); // ✅ New focus node
+
   String _name = '';
   List<String> _messageToOptions = [];
   String? _selectedMessageTo;
   String? _ticketKey;
 
-
   @override
   void initState() {
     super.initState();
     _name = Constants.contactName;
-    // _ticketKey must be set in didChangeDependencies because ModalRoute.of(context) can't be called in initState.
-    // So we leave it here and assign in didChangeDependencies.
     _fetchMessageToList();
-  }
 
+    // ✅ Autofocus after build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _messageFocusNode.requestFocus();
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -40,13 +41,12 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     print('TicketKey passed: $_ticketKey');
   }
 
-
   @override
   void dispose() {
     _messageController.dispose();
+    _messageFocusNode.dispose(); // ✅ Dispose focus node
     super.dispose();
   }
-
 
   Future<void> _fetchMessageToList() async {
     final url = Uri.parse('${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}');
@@ -54,7 +54,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       'Authorization': 'Bearer ${Constants.accessToken}',
       'Accept': 'application/json',
     });
-
 
     if (response.statusCode == 200) {
       final List<dynamic> jsonList = json.decode(response.body);
@@ -74,9 +73,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     }
   }
 
-
-
-
   void _sendMessage() async {
     final message = _messageController.text.trim();
     if (_ticketKey == null) {
@@ -86,7 +82,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       return;
     }
 
-
     if (_selectedMessageTo == null || _selectedMessageTo == 'None') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a recipient')),
@@ -94,14 +89,12 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       return;
     }
 
-
     if (message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Message cannot be empty')),
       );
       return;
     }
-
 
     final body = json.encode({
       'TicketKey': int.parse(_ticketKey!),
@@ -111,10 +104,8 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       'UserName': _name,
     });
 
-
     print('Sending message body: $body');
     print('Using token: ${Constants.accessToken}');
-
 
     final response = await http.post(
       Uri.parse('${Constants.baseUrlData}SendMessage'),
@@ -126,7 +117,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       body: body,
     );
 
-
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Message sent successfully')),
@@ -136,9 +126,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
         _selectedMessageTo = _messageToOptions.isNotEmpty ? _messageToOptions.first : null;
       });
       FocusScope.of(context).unfocus();
-      // Wait for the dialog to complete before popping the screen
       await showMessageDialog(context, 'Your message has been successfully sent to Porter Lee Corporation.');
-      // Go back to the previous screen
       Navigator.of(context).pop();
     } else {
       print('Failed status: ${response.statusCode}');
@@ -149,13 +137,12 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Send Message'),
-        backgroundColor: Colors.blue[800], // updated to blue
+        backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
@@ -192,6 +179,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _messageController,
+                  focusNode: _messageFocusNode, // ✅ Apply focus node
                   maxLines: 12,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -199,7 +187,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -215,9 +202,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   ),
                 ),
                 const SizedBox(height: 60),
-                Center(
-                  //child: Icon(Icons.message, size: 80, color: Colors.green),
-                ),
               ],
             ),
           ),

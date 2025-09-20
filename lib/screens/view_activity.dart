@@ -2,13 +2,19 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
-import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 
 class ViewActivityScreen extends StatefulWidget {
   final String ticketNumber;
-  const ViewActivityScreen({super.key, required this.ticketNumber});
+  final String shortDescription;
+
+  const ViewActivityScreen({
+    super.key,
+    required this.ticketNumber,
+    required this.shortDescription,
+  });
 
   @override
   State<ViewActivityScreen> createState() => _ViewActivityScreenState();
@@ -35,8 +41,9 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   }
 
   void _showCreateActivityDialog() {
-    String? selectedPriorityCode;
+    String? selectedPriorityCode = '5';
     TextEditingController messageController = TextEditingController();
+    FocusNode messageFocusNode = FocusNode();
     bool isCritical = false;
     bool showPriorityError = false;
     bool showMessageError = false;
@@ -46,6 +53,9 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              messageFocusNode.requestFocus();
+            });
             return AlertDialog(
               title: const Text('Create Activity'),
               content: SingleChildScrollView(
@@ -93,6 +103,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                       const Text('Message'),
                       TextField(
                         controller: messageController,
+                        focusNode: messageFocusNode,
                         maxLines: 4,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
@@ -201,7 +212,8 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('View Activity: #${widget.ticketNumber}'),
+        title: Text('View Activity'),
+        //title: Text('Activity Records for Ticket #${widget.ticketNumber} - ${widget.shortDescription}'),
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
       ),
@@ -213,7 +225,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'View Activity: #${widget.ticketNumber}',
+                  'Activity Records for Ticket #${widget.ticketNumber} - ${widget.shortDescription}',
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 ElevatedButton(

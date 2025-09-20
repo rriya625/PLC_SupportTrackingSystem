@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'package:ticket_tracker_app/screens/api_helper.dart';
+import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
 import 'dart:convert';
 import 'package:ticket_tracker_app/constants.dart';
@@ -27,6 +27,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   final _detailedDescController = TextEditingController();
   final _customerRefController = TextEditingController();
   final _confirmationToController = TextEditingController();
+  final _shortDescFocus = FocusNode();
 
   // For web, store images as List<Uint8List>; for mobile, List<File>
   List<dynamic> _attachedImages = [];
@@ -136,6 +137,9 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     super.initState();
     // Pre-fill the confirmation to controller with the email address.
     _confirmationToController.text = Constants.emailAddress;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _shortDescFocus.requestFocus();
+    });
     _loadPriorityOptions();
   }
 
@@ -186,7 +190,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               ),
 
               const SizedBox(height: 16),
-              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError),
+              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, focusNode: _shortDescFocus,),
               const SizedBox(height: 16),
               _buildTextField(
                 label: 'Detailed Description',
@@ -468,6 +472,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     int maxLines = 1,
     bool isRequired = false,
     String? errorText,
+    FocusNode? focusNode,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,6 +489,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         const SizedBox(height: 4),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           maxLines: maxLines,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -877,5 +883,15 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _shortDescFocus.dispose();
+    _shortDescController.dispose();
+    _detailedDescController.dispose();
+    _customerRefController.dispose();
+    _confirmationToController.dispose();
+    super.dispose();
   }
 }
