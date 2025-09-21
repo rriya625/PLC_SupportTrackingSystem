@@ -315,6 +315,7 @@ class APIHelper {
     required String customerReference,
     required String longDesc,
     required String confirmationEmail,
+    required String SharepointLink,
   }) async {
     await ensureValidToken();
     final uri = Uri.parse('${Constants.baseUrlData}CreateTicket');
@@ -327,6 +328,7 @@ class APIHelper {
       'CustomerReference': customerReference,
       'LongDesc': longDesc,
       'ConfirmationEMailTo': confirmationEmail,
+      'SharepointLink': SharepointLink,
     });
 
     final response = await http.post(
@@ -747,6 +749,90 @@ class APIHelper {
       }).toList();
     } else {
       throw Exception('Failed to load ticket groups: ${response.statusCode}');
+    }
+  }
+
+  static Future<http.Response> exportTicketsCSV({
+    required String ticketType,
+    required String status,
+    required String searchBy,
+    required String sortBy,
+    required String searchValue,
+    required String fromDate,
+    required String toDate,
+    required String ticketGroupCode,
+  }) async {
+    await ensureValidToken();
+
+    final searchType = ticketType == 'Yours' ? 'USER' : 'DEPT';
+    final userId = searchType == 'USER' ? Constants.userID.toString() : '-1';
+    final deptId = Constants.qbLinkKey;
+
+    String statusCode = '';
+    switch (status) {
+      case 'Open':
+        statusCode = 'O';
+        break;
+      case 'Deliverable':
+        statusCode = 'D';
+        break;
+      case 'Closed':
+        statusCode = 'C';
+        break;
+    }
+
+    String searchByMapped;
+    if (searchBy == 'Ticket #') {
+      searchByMapped = 'Ticket Key';
+    } else if (searchBy == 'Description') {
+      searchByMapped = 'Short Desc';
+    } else {
+      searchByMapped = '';
+    }
+
+    final sortByMapped = sortBy;
+
+    final uri = Uri.parse(
+      '${Constants.baseUrlData}ExportTicketsCSV'
+          '?SearchType=${Uri.encodeComponent(searchType)}'
+          '&UserID=${Uri.encodeComponent(userId)}'
+          '&DeptID=${Uri.encodeComponent(deptId)}'
+          '&Status=${Uri.encodeComponent(statusCode)}'
+          '&SortBy=${Uri.encodeComponent(sortByMapped)}'
+          '&SearchBy=${Uri.encodeComponent(searchByMapped.trim())}'
+          '&SearchValue=${Uri.encodeComponent(searchValue.trim())}'
+          '&DateFrom=${Uri.encodeComponent(fromDate)}'
+          '&DateTo=${Uri.encodeComponent(toDate)}'
+          '&TicketGroup=${Uri.encodeComponent(ticketGroupCode)}',
+    );
+
+    return await http.get(uri, headers: {
+      'Authorization': 'Bearer ${Constants.accessToken}',
+      'Accept': 'application/json',
+    });
+  }
+
+  static Future<Map<String, dynamic>> updateTicket(int ticketKey, String customerReference, String sharepointLink) async {
+    final url = Uri.parse('${Constants.baseUrlData}UpdateTicket');
+
+    final headers = {
+      'accept': 'application/json',
+      'Authorization': 'Bearer ${Constants.accessToken}',
+      'Content-Type': 'application/json',
+    };
+
+    final body = jsonEncode({
+      'TicketKey': ticketKey,
+      'CustomerReference': customerReference,
+      'SharepointLink': sharepointLink,
+    });
+
+    final response = await http.post(url, headers: headers, body: body);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to update ticket: ${response.statusCode}');
     }
   }
 

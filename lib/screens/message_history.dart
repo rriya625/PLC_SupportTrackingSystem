@@ -112,10 +112,8 @@ class _MessageHistoryScreenState extends State<MessageHistoryScreen> {
                     const SizedBox(height: 4),
                     // Extract sender name
                     Text(
-                      'From: ${(msg['Message'] as String?)?.replaceFirstMapped(
-                        RegExp(r'^\\*([^)]*)[^:]*:.*'),
-                            (match) => match.group(1)?.trim() ?? 'Unknown',
-                      ) ?? 'Unknown'}',
+                      //'From: ${(msg['Message'] as String?)?.replaceFirstMapped(  RegExp(r'^\\*([^)]*)[^:]*:.*'),  (match) => match.group(1)?.trim() ?? 'Unknown', ) ?? 'Unknown'}',
+                      'From: ${msg['MsgFrom'] ?? 'Unknown'}',
                     ),
                     const SizedBox(height: 4),
                     Text(

@@ -27,6 +27,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   final _detailedDescController = TextEditingController();
   final _customerRefController = TextEditingController();
   final _confirmationToController = TextEditingController();
+  final _customerSharepointLink = TextEditingController();
   final _shortDescFocus = FocusNode();
 
   // For web, store images as List<Uint8List>; for mobile, List<File>
@@ -190,7 +191,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               ),
 
               const SizedBox(height: 16),
-              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, focusNode: _shortDescFocus,),
+              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, focusNode: _shortDescFocus, maxLength: 250),
               const SizedBox(height: 16),
               _buildTextField(
                 label: 'Detailed Description',
@@ -198,11 +199,14 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                 maxLines: 4,
                 isRequired: true,
                 errorText: detailedDescError,
+                maxLength: 4000,
               ),
               const SizedBox(height: 16),
-              _buildTextField(label: 'Customer Ref', controller: _customerRefController),
+              _buildTextField(label: 'Customer Ref', controller: _customerRefController, maxLength: 20),
               const SizedBox(height: 16),
-              _buildTextField(label: 'Send Confirmation To', controller: _confirmationToController),
+              _buildTextField(label: 'Sharepoint Link', controller: _customerSharepointLink, maxLength: 250),
+              const SizedBox(height: 16),
+              _buildTextField(label: 'Send Confirmation To', controller: _confirmationToController, maxLength: 50),
 
               const SizedBox(height: 24),
 
@@ -333,6 +337,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                     final confirmationTo = _confirmationToController.text.trim();
                     final qbLinkKey = Constants.qbLinkKey;
                     final userId = Constants.userID;
+                    final sharepointLink = _customerSharepointLink.text.trim();
 
                     try {
                       final response = await APIHelper.createTicket(
@@ -343,6 +348,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                         customerReference: customerReference,
                         longDesc: longDesc,
                         confirmationEmail: confirmationTo,
+                        SharepointLink: sharepointLink,
                       );
                       print('Create Ticket Response: $response');
 
@@ -431,6 +437,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                         _shortDescController.clear();
                         _detailedDescController.clear();
                         _customerRefController.clear();
+                        _customerSharepointLink.clear();
                         _selectedPriority = _priorityOptions.firstWhere(
                           (item) => item.startsWith("5 -"),
                           orElse: () => _priorityOptions.isNotEmpty ? _priorityOptions[0] : 'Normal',
@@ -473,6 +480,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     bool isRequired = false,
     String? errorText,
     FocusNode? focusNode,
+    int maxLength = 0,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -491,6 +499,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
           controller: controller,
           focusNode: focusNode,
           maxLines: maxLines,
+          maxLength: maxLength > 0 ? maxLength : null,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -892,6 +901,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     _detailedDescController.dispose();
     _customerRefController.dispose();
     _confirmationToController.dispose();
+    _customerSharepointLink.dispose();
     super.dispose();
   }
 }

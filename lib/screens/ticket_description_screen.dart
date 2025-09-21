@@ -13,7 +13,9 @@ import 'package:flutter/foundation.dart';
 //import 'package:ticket_tracker_app/screens/upload_web.dart';
 import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
-
+import 'package:url_launcher/url_launcher.dart';
+import 'package:ticket_tracker_app/utils/dialogs.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
   const TicketDescriptionScreenStateful({Key? key}) : super(key: key);
@@ -30,10 +32,11 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
   String currentStatus = '';
   String shortDescription = '';
   String longDescription = '';
+  String customerReference = '';
+  String sharepointLink = '';
 
   final ImagePicker _picker = ImagePicker();
   final List<dynamic> _attachedImages = [];
-
 
   @override
   void initState() {
@@ -53,6 +56,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               currentStatus = (data['Status'] == 'O') ? 'Open' : data['Status'] ?? '';
               shortDescription = data['ShortDesc'] ?? '';
               longDescription = _parseRtf(data['LongDesc'] ?? '');
+              customerReference = data['CustomerReference'] ?? '';
+              sharepointLink = data['SharepointLink'] ?? '';
             });
           } else {
             setState(() {
@@ -74,7 +79,6 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
         .trim();
   }
 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -94,16 +98,57 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
             _buildField('Date Created:', dateCreated),
             _buildField('Assigned to:', assignedTo),
             _buildField('Current Status:', currentStatus),
-            const SizedBox(height: 16),
+            //const SizedBox(height: 2),  //12
             // New description section with larger box and row header
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Description:', style: TextStyle(fontSize: 16)),
-                const SizedBox(width: 8),
+                SizedBox(width: 140, child: Text('Description:', style: const TextStyle(fontSize: 16))),
+                //const Text('Description:', style: TextStyle(fontSize: 16)),
+                const SizedBox(width: 2),
                 Expanded(child: Text(shortDescription, style: const TextStyle(fontSize: 16))),
               ],
             ),
+            const SizedBox(height: 4),  //12
+
+            _buildField('Customer Ref:', customerReference),
+
+            // For clickable SharePoint link
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(
+                    width: 140,
+                    child: Text('SharePoint:', style: TextStyle(fontSize: 16)),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () async {
+                        final url = sharepointLink.startsWith('http') ? sharepointLink : 'https://${sharepointLink}';
+                        if (await canLaunchUrl(Uri.parse(url))) {
+                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Could not launch SharePoint link')),
+                          );
+                        }
+                      },
+                      child: Text(
+                        sharepointLink,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             const SizedBox(height: 12),
             Container(
               height: 400,
@@ -371,28 +416,51 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                   ],
                 ),
                 const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      print('Navigating to ViewActivityScreen with ticketNumber: $ticketNumber');
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ViewActivityScreen(ticketNumber: ticketNumber, shortDescription: shortDescription),
-                          settings: RouteSettings(arguments: ticketNumber),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _showUpdateTicketDialog(
+                            context,
+                            int.tryParse(ticketKey) ?? 0,
+                            customerReference,
+                            sharepointLink,
+                          );
+                        },
+                        icon: const Icon(Icons.update),
+                        label: const Text('Update Ticket'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlueAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.timeline),
-                    label: const Text('View Activity'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ViewActivityScreen(ticketNumber: ticketNumber, shortDescription: shortDescription),
+                              settings: RouteSettings(arguments: ticketNumber),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.timeline),
+                        label: const Text('View Activity'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlueAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -407,7 +475,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
   Widget _buildField(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 4),  //12
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -857,5 +925,87 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
     }
   }
 
+  Future<void> _showUpdateTicketDialog(
+      BuildContext context,
+      int ticketKey,
+      String currentCustomerRef,
+      String currentSharepointLink,
+      ) async {
+    final customerRefController = TextEditingController(text: currentCustomerRef);
+    final sharepointLinkController = TextEditingController(text: currentSharepointLink);
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        Widget dialogContent = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: customerRefController,
+              maxLength: 20,
+              decoration: const InputDecoration(labelText: 'Customer Reference'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: sharepointLinkController,
+              maxLength: 250,
+              decoration: const InputDecoration(labelText: 'Sharepoint Link'),
+            ),
+          ],
+        );
+
+        return AlertDialog(
+          title: const Text('Update Ticket'),
+          content: SingleChildScrollView(
+            child: kIsWeb
+                ? SizedBox(width: 400, child: dialogContent) // 💻 Web fixed width
+                : dialogContent,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final updatedCustomerRef = customerRefController.text.trim();
+                final updatedSharepointLink = sharepointLinkController.text.trim();
+
+                try {
+                  final result = await APIHelper.updateTicket(
+                      ticketKey, updatedCustomerRef, updatedSharepointLink);
+
+                  if (result['Code'] == 300) {
+                    Navigator.of(context).pop();
+
+                    final updatedData = await APIHelper.fetchTicketDetails(ticketKey.toString());
+                    if (updatedData != null && context.mounted) {
+                      setState(() {
+                        ticketNumber = updatedData['TicketKey'] ?? '';
+                        dateCreated = updatedData['StartDate'] ?? '';
+                        assignedTo = updatedData['EmployeeName'] ?? 'N/A';
+                        currentStatus = (updatedData['Status'] == 'O') ? 'Open' : updatedData['Status'] ?? '';
+                        shortDescription = updatedData['ShortDesc'] ?? '';
+                        longDescription = _parseRtf(updatedData['LongDesc'] ?? '');
+                        customerReference = updatedData['CustomerReference'] ?? '';
+                        sharepointLink = updatedData['SharepointLink'] ?? '';
+                      });
+                    }
+
+                    await showMessageDialog(context, 'Successfully Updated');
+                  } else {
+                    await showMessageDialog(context, 'Update failed: ${result['Message']}');
+                  }
+                } catch (e) {
+                  await showMessageDialog(context, 'Error: $e');
+                }
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
 }

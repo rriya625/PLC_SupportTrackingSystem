@@ -3,6 +3,9 @@ import 'ticket_description_screen.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:ticket_tracker_app/utils/web_download_helper.dart' if (dart.library.html) 'package:ticket_tracker_app/utils/web_download_helper.dart';
 
 class ViewTicketsScreen extends StatefulWidget {
   const ViewTicketsScreen({Key? key}) : super(key: key);
@@ -30,6 +33,8 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   bool useActiveGroupsOnly = true;
   bool isTicketGroupLoading = true;
 
+  bool _filtersExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,20 +59,20 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         useActiveOnly: useActiveGroupsOnly,
       );
 
-      print("Raw ticket group data from API (${data.length} entries):");
-      for (var group in data) {
-        print(" 1 - Code: ${group['Code']}, Description: ${group['Description']}");
-      }
+      //print("Raw ticket group data from API (${data.length} entries):");
+      //for (var group in data) {
+       // print(" 1 - Code: ${group['Code']}, Description: ${group['Description']}");
+      //}
 
       setState(() {
         final validGroups = data
             .where((g) => g['Code'] != null && g['Code'].toString().trim().isNotEmpty)
             .toList();
 
-        print("Filtered valid ticket groups (${validGroups.length}):");
-        for (var group in validGroups) {
-          print(" - Code: ${group['Code']}, Description: ${group['Description']}");
-        }
+        //print("Filtered valid ticket groups (${validGroups.length}):");
+        //for (var group in validGroups) {
+        //  print(" - Code: ${group['Code']}, Description: ${group['Description']}");
+        //}
 
         ticketGroups = validGroups;
 
@@ -177,6 +182,94 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     }
   }
 
+  Future<void> _exportToExcel() async {
+    if (fromDate != null && toDate != null && fromDate!.isAfter(toDate!)) {
+      setState(() {
+        dateErrorText = 'From Date cannot be after To Date.';
+      });
+      return;
+    }
+
+    if (searchBy == 'Ticket #' && searchController.text.trim().isNotEmpty) {
+      if (int.tryParse(searchController.text.trim()) == null) {
+        setState(() {
+          tickets.clear();
+        });
+
+        if (context.mounted) {
+          await showMessageDialog(context, 'Please enter a valid numeric Ticket #');
+          FocusScope.of(context).requestFocus(searchFocusNode);
+        }
+        return;
+      }
+    }
+
+    setState(() {
+      dateErrorText = null;
+    });
+
+    final from = fromDate != null ? _formatApiDate(fromDate!) : '';
+    final to = toDate != null ? _formatApiDate(toDate!) : '';
+    final searchVal = searchController.text.trim();
+    final ticketGroup = selectedTicketGroup ?? '';
+
+    // Show "Exporting..." dialog
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return Dialog(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Text("Exporting to Excel..."),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    });
+
+    try {
+      final response = await APIHelper.exportTicketsCSV(
+        ticketType: ticketType,
+        status: status,
+        searchBy: searchBy,
+        sortBy: sortBy,
+        searchValue: searchVal,
+        fromDate: from,
+        toDate: to,
+        ticketGroupCode: ticketGroup,
+      );
+
+      Navigator.of(context, rootNavigator: true).pop(); // close dialog
+
+      if (response.statusCode == 200) {
+        if (kIsWeb) {
+          final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+          final filename = "tickets_export_$timestamp.csv";
+          downloadCSVWeb(response.bodyBytes, filename);
+        }
+        else {
+          await showMessageDialog(context, 'Export successful (received file).');
+          // TODO: Save to file on mobile
+        }
+      } else {
+        await showMessageDialog(context, 'Failed to export. (${response.statusCode})');
+      }
+    } catch (e) {
+      Navigator.of(context, rootNavigator: true).pop();
+      debugPrint('Export error: $e');
+      await showMessageDialog(context, 'Error exporting to Excel.');
+    }
+  }
+
   String _formatDate(DateTime date) {
     return '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}';
   }
@@ -203,8 +296,15 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildFilters(),
+            ExpansionTile(
+              initiallyExpanded: _filtersExpanded,
+              title: const Text('Search Filters'),
+              trailing: Icon(_filtersExpanded ? Icons.expand_less : Icons.expand_more),
+              onExpansionChanged: (expanded) => setState(() => _filtersExpanded = expanded),
+              children: [_buildFilters()],
+            ),
             const SizedBox(height: 20),
+
             Text(
               'Total Tickets: ${tickets.length}',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey[700]),
@@ -227,7 +327,8 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                     },
                     child: _buildTicketCard(
                       ticketKey: ticket['TicketKey'] ?? '',
-                      date: ticket['StartDate'] ?? '',
+                      //date: ticket['StartDate'] ?? '',
+                      date: 'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
                       shortDesc: ticket['ShortDesc'] ?? '',
                     ),
                   );
@@ -241,197 +342,223 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Widget _buildFilters() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: _buildDropdown('Ticket Type', ['Yours', 'Department'], ticketType, (val) => setState(() => ticketType = val!))),
-            const SizedBox(width: 12),
-            Expanded(child: _buildDropdown('Status', ['Open', 'Closed', 'Deliverable'], status, (val) => setState(() => status = val!))),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _buildDropdown('Search By', ['None', 'Ticket #', 'Description'], searchBy, (val) => setState(() => searchBy = val!))),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Search', style: TextStyle(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 4),
-                  TextField(
-                    controller: searchController,
-                    focusNode: searchFocusNode,
-                    decoration: const InputDecoration(
-                      hintText: 'Search...',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('From Date', style: TextStyle(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () => _pickDate(context, true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(fromDate != null ? _formatDate(fromDate!) : 'Select'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('To Date', style: TextStyle(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 4),
-                  GestureDetector(
-                    onTap: () => _pickDate(context, false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(toDate != null ? _formatDate(toDate!) : 'Select'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (dateErrorText != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: Text(
-              dateErrorText!,
-              style: const TextStyle(color: Colors.red),
-            ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildDropdown('Ticket Type', ['Yours', 'Department'], ticketType, (val) => setState(() => ticketType = val!))),
+              const SizedBox(width: 12),
+              Expanded(child: _buildDropdown('Status', ['All', 'Open', 'Closed', 'Deliverable'], status, (val) => setState(() => status = val!))),
+            ],
           ),
-        const SizedBox(height: 12),
-
-        /// Ticket Group & Active checkbox
-        StatefulBuilder(
-          builder: (context, setLocalState) {
-            print("Selected ticket group: $selectedTicketGroup");
-            print("Available group codes:");
-            for (var g in ticketGroups) {
-              print(" - ${g['Code'] ?? 'null'} (${g['Description'] ?? 'no description'})");
-            }
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Ticket Group', style: TextStyle(fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildDropdown('Search By', ['None', 'Ticket #', 'Description'], searchBy, (val) => setState(() => searchBy = val!))),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Search', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    TextField(
+                        controller: searchController,
+                        focusNode: searchFocusNode,
+                        decoration: const InputDecoration(
+                          hintText: 'Search...',
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                        ))
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('From Date', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => _pickDate(context, true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: DropdownButton<String>(
-                          value: (selectedTicketGroup != null &&
-                              ticketGroups.any((g) => g['Code'] == selectedTicketGroup))
-                              ? selectedTicketGroup
-                              : null,
-                          isExpanded: true,
-                          underline: const SizedBox(),
-                          hint: const Text('Select Group'),
-                          disabledHint: const Text("Loading..."),
-                          items: ticketGroups.map((group) {
-                            final code = group['Code']?.toString() ?? '';
-                            final desc = group['Description']?.toString() ?? code;
-                            return DropdownMenuItem(
-                              value: code,
-                              child: Text(desc),
-                            );
-                          }).toList(),
-                          onChanged: isTicketGroupLoading
-                              ? null
-                              : (value) => setLocalState(() => selectedTicketGroup = value),
-
-                        ),
+                        child: Text(fromDate != null ? _formatDate(fromDate!) : 'Select'),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(' '),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: useActiveGroupsOnly,
-                          onChanged: (value) async {
-                            setLocalState(() => useActiveGroupsOnly = value ?? true);
-                            await _fetchTicketGroups();
-                            //setLocalState(() {}); // refreshes dropdown after fetch
-                          },
-                        ),
-                        const Text('Active Groups Only'),
-                      ],
                     ),
                   ],
                 ),
-              ],
-            );
-          },
-        ),
-
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(child: _buildDropdown('Sort By', ['Last Activity', 'Start Date'], sortBy, (val) => setState(() => sortBy = val!))),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(' ', style: TextStyle(fontWeight: FontWeight.w500)),
-                  ElevatedButton(
-                    onPressed: _fetchAndSetTickets,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('To Date', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => _pickDate(context, false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(toDate != null ? _formatDate(toDate!) : 'Select'),
+                      ),
                     ),
-                    child: const Text('Search'),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (dateErrorText != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                dateErrorText!,
+                style: const TextStyle(color: Colors.red),
               ),
             ),
-          ],
-        ),
-      ],
+          const SizedBox(height: 12),
+
+          /// Ticket Group & Active checkbox
+          StatefulBuilder(
+            builder: (context, setLocalState) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Ticket Group', style: TextStyle(fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: DropdownButton<String>(
+                            value: (selectedTicketGroup != null &&
+                                ticketGroups.any((g) => g['Code'] == selectedTicketGroup))
+                                ? selectedTicketGroup
+                                : null,
+                            isExpanded: true,
+                            underline: const SizedBox(),
+                            hint: const Text('Select Group'),
+                            disabledHint: const Text("Loading..."),
+                            items: ticketGroups.map((group) {
+                              final code = group['Code']?.toString() ?? '';
+                              final desc = group['Description']?.toString() ?? code;
+                              return DropdownMenuItem(
+                                value: code,
+                                child: Text(desc),
+                              );
+                            }).toList(),
+                            onChanged: isTicketGroupLoading
+                                ? null
+                                : (value) => setLocalState(() => selectedTicketGroup = value),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(' '),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: useActiveGroupsOnly,
+                            onChanged: (value) async {
+                              setLocalState(() => useActiveGroupsOnly = value ?? true);
+                              await _fetchTicketGroups();
+                            },
+                          ),
+                          const Text('Active Groups Only'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left: Sort By Dropdown
+              Expanded(
+                child: _buildDropdown(
+                  'Sort By',
+                  ['Last Activity', 'Start Date'],
+                  sortBy,
+                      (val) => setState(() => sortBy = val!),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Right: Buttons with vertical alignment fix
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 24.0), // 👈 Adjust this value as needed
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Wrap(
+                      spacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 96,
+                          child: ElevatedButton(
+                            onPressed: _fetchAndSetTickets,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.lightBlueAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Search'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 96,
+                          child: ElevatedButton(
+                            onPressed: _exportToExcel,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.greenAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Export'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        ],
+      ),
     );
   }
 
