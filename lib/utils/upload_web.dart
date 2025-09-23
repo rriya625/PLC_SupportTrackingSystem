@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-
+import 'dart:async';
 import '../constants.dart';
 
 Future<void> pickAndUploadFilesWeb({
@@ -109,7 +109,6 @@ void pickFilesForWeb({
   final input = html.FileUploadInputElement();
   input.accept = '*/*';
   input.multiple = true;
-  input.click();
 
   input.onChange.listen((event) async {
     final files = input.files;
@@ -117,23 +116,40 @@ void pickFilesForWeb({
 
     showUploadSpinner('Preparing preview...');
 
-    for (final file in files) {
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoad.first;
+    try {
+      for (final file in files) {
+        final reader = html.FileReader();
+        final completer = Completer<Uint8List>();
 
-      final Uint8List fileBytes = reader.result as Uint8List;
-      final base64 = base64Encode(fileBytes);
+        reader.onLoad.listen((event) {
+          completer.complete(reader.result as Uint8List);
+        });
+        reader.onError.listen((event) {
+          completer.completeError('File read error');
+        });
+        reader.onAbort.listen((event) {
+          completer.completeError('File read aborted');
+        });
 
-      pendingFiles.add({
-        'sFileName': file.name,
-        'Base64Content': base64,
-      });
+        reader.readAsArrayBuffer(file);
+        final fileBytes = await completer.future;
+        final base64 = base64Encode(fileBytes);
+
+        pendingFiles.add({
+          'sFileName': file.name,
+          'Base64Content': base64,
+        });
+      }
+    } catch (e) {
+      print('Error reading file(s): $e');
+    } finally {
+      hideUploadSpinner();
+      updateUI();
+      input.remove(); // optional cleanup
     }
-
-    hideUploadSpinner();
-    updateUI();
   });
+
+  input.click();
 }
 
 Future<void> uploadPickedFilesWeb(int ticketKey, List<Map<String, dynamic>> files) async {
