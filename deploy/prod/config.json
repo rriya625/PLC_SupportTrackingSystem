@@ -1,0 +1,7 @@
+{
+  "AUTH_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Auth0001/PROD/",
+  "INTERFACE_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Intf4010/PROD/",
+  "LABSAVEDIR": "C:\\LABSAVE\\SUPPORT_WEB_DEV\\",
+  "LOG_UPLOAD_URL": "upload_log.ashx",
+  "HOST_ENV": "windows"
+}
