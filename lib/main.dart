@@ -3,6 +3,8 @@ import 'constants.dart';
 import 'screens/login_screen.dart';
 import 'utils/spinner_helper.dart'; // ⬅️ Add this import to access rootNavigatorKey
 //import 'utils/log_helper.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

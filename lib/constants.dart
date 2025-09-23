@@ -6,9 +6,16 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// A utility class that holds constant values used throughout the application,
 /// including API URLs, authentication credentials, and global session-related data.
 class Constants {
-  // --- API URLs ---
-  static String baseUrlAuth = 'https://support.porterlee.com/plc/intf/prospect/Auth0001/DEV/LoginAuth0001Service/';
-  static String baseUrlData = 'https://support.porterlee.com/plc/intf/prospect/intf4010/DEV/BEASTProspectIntf4010APIService/';
+  // --- API URLs assigned at build time using --dart-define ---
+  static final String baseUrlAuth = const String.fromEnvironment(
+    'BASE_URL_AUTH',
+    defaultValue: 'https://support.porterlee.com/plc/intf/prospect/Auth0001/DEV/LoginAuth0001Service/',
+  );
+
+  static final String baseUrlData = const String.fromEnvironment(
+    'BASE_URL_DATA',
+    defaultValue: 'https://support.porterlee.com/plc/intf/prospect/intf4010/DEV/BEASTProspectIntf4010APIService/',
+  );
 
   // --- Optional external config values ---
   static String? logUploadUrl; // from config.json["LOG_UPLOAD_URL"]
@@ -27,7 +34,7 @@ class Constants {
   static List<dynamic> ticketData = [];
   static Map<String, dynamic>? selectedTicketDetails;
 
-  /// Loads configuration from config.json for web builds.
+  /// Loads optional configuration values from config.json (web only).
   static Future<void> loadConfig() async {
     if (!kIsWeb) {
       print('[Constants] Not web — skipping config load');
@@ -50,28 +57,24 @@ class Constants {
       if (respJson.statusCode == 200 && respJson.body.isNotEmpty) {
         final map = json.decode(respJson.body);
 
+        // Log values, but don't overwrite dart-define values
         final auth = map['AUTH_BASE_URL']?.toString();
         final data = map['INTERFACE_BASE_URL']?.toString();
-        final logUrl = map['LOG_UPLOAD_URL']?.toString();
-        final env = map['HOST_ENV']?.toString();
 
         if (auth != null && auth.isNotEmpty) {
-          final cleanedAuth = auth.endsWith('/') ? auth : '$auth/';
-          baseUrlAuth = '${cleanedAuth}LoginAuth0001Service/';
-          print('[Constants] baseUrlAuth set from config.json: $baseUrlAuth');
+          print('[Constants] AUTH_BASE_URL from config.json: $auth');
         }
-
         if (data != null && data.isNotEmpty) {
-          final cleanedData = data.endsWith('/') ? data : '$data/';
-          baseUrlData = '${cleanedData}BEASTProspectIntf4010APIService/';
-          print('[Constants] baseUrlData set from config.json: $baseUrlData');
+          print('[Constants] INTERFACE_BASE_URL from config.json: $data');
         }
 
+        final logUrl = map['LOG_UPLOAD_URL']?.toString();
         if (logUrl != null && logUrl.isNotEmpty) {
           logUploadUrl = logUrl;
           print('[Constants] logUploadUrl set from config.json: $logUploadUrl');
         }
 
+        final env = map['HOST_ENV']?.toString();
         if (env != null && env.isNotEmpty) {
           hostEnv = env;
           print('[Constants] hostEnv set from config.json: $hostEnv');
@@ -85,7 +88,7 @@ class Constants {
       print('[Constants] Error loading config.json: $e');
     }
 
-    // Fallback to default if config.json fails
+    // Fallback
     print('[Constants] Using default API base URLs');
   }
 }
