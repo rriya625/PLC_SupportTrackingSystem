@@ -10,6 +10,8 @@ import 'dart:io' show Platform;
 import 'package:ticket_tracker_app/utils/dialogs.dart';
 import 'dart:math' as math;
 import 'package:ticket_tracker_app/screens/login_screen.dart';
+import 'package:ticket_tracker_app/utils/file_download_helper.dart';
+import 'package:ticket_tracker_app/utils/web_log_helper.dart';
 
 /// Home screen shown after successful login.
 /// Displays navigation buttons and support contact info with branding.
@@ -112,6 +114,15 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: _showUpdatePasswordDialog,
                     ),
                     const SizedBox(height: 20),
+
+                    _buildMainButton(
+                      icon: Icons.menu_book,
+                      label: 'Download User Manual',
+                      onTap: () async {
+                        await FileDownloadHelper.downloadUserManual(context);
+                        await WebLogHelper.log("User attempted manual download");
+                      },                    ),
+                    const SizedBox(height: 20),
                     _buildMainButton(
                       icon: Icons.logout,
                       label: 'Logout',
@@ -155,11 +166,60 @@ class _HomeScreenState extends State<HomeScreen> {
         automaticallyImplyLeading: false, //This hides the back arrow
       ),
 
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: content,
-        ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: content,
+            ),
+          ),
+
+          // ✅ Show "DEVELOPMENT" ribbon if buildEnv is dev
+          if (Constants.isDev)
+            IgnorePointer(
+              child: Transform.translate(
+                offset: const Offset(0, -50), // ✅ shift entire watermark group upward
+                child: Stack(
+                  children: [
+                    // Center watermark (now higher)
+                    Center(
+                      child: Transform.rotate(
+                        angle: -0.7, // ~ -40 degrees
+                        child: Text(
+                          "DEVELOPMENT",
+                          style: TextStyle(
+                            fontSize: 80,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.withOpacity(0.12),
+                            letterSpacing: 4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Second watermark (even higher)
+                    Center(
+                      child: Transform.translate(
+                        offset: const Offset(0, -200), // extra shift above the first one
+                        child: Transform.rotate(
+                          angle: -0.7,
+                          child: Text(
+                            "DEVELOPMENT",
+                            style: TextStyle(
+                              fontSize: 80,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red.withOpacity(0.12),
+                              letterSpacing: 4,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

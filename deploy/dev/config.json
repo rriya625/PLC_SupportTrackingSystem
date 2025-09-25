@@ -1,7 +1,9 @@
 {
-  "AUTH_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Auth0001/PROD/",
-  "INTERFACE_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Intf4010/PROD/",
+  "APP_ENV": "dev",
   "LABSAVEDIR": "C:\\LABSAVE\\SUPPORT_WEB_DEV\\",
   "LOG_UPLOAD_URL": "upload_log.ashx",
-  "HOST_ENV": "windows"
+  "MANUAL_DOWNLOAD_URL": "download_manual.ashx",
+  "HOST_ENV": "windows",
+  "AUTH_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Auth0001/DEV/LoginAuth0001Service/",
+  "INTERFACE_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/intf4010/DEV/BEASTProspectIntf4010APIService/"
 }

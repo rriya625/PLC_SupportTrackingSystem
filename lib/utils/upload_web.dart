@@ -11,8 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:async';
 import '../constants.dart';
+import 'package:ticket_tracker_app/utils/dialogs.dart';
 
 Future<void> pickAndUploadFilesWeb({
+  required BuildContext context,
   required int ticketKey,
 }) async {
   final input = html.FileUploadInputElement();
@@ -74,6 +76,15 @@ Future<void> pickAndUploadFilesWeb({
         final code = json['Code'];
         final msg = json['Message'];
         print("✅ Upload Status: $code, Message: $msg");
+
+        if (json['Code'].toString() == '300') {
+          //hideUploadSpinner();
+          await showMessageDialog(context, 'Upload Completed ✅');
+        } else {
+          //hideUploadSpinner();
+          await showMessageDialog(context, 'Upload failed: ${json['Message']}');
+        }
+
       } else {
         print("❌ Upload failed: ${response.reasonPhrase}");
       }

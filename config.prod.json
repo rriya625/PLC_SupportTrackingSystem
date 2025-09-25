@@ -1,0 +1,7 @@
+{
+  "APP_ENV": "prod",
+  "LABSAVEDIR": "C:\\LABSAVE\\SUPPORT_WEB_PROD\\",
+  "LOG_UPLOAD_URL": "upload_log.ashx",
+  "MANUAL_DOWNLOAD_URL": "download_manual.ashx",
+  "HOST_ENV": "windows"
+}

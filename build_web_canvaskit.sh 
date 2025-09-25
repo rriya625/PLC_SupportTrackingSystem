@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e  # stop script on error
 
 # ── CONFIG ──────────────────────────────────────────────────────
 ENV=$1
@@ -7,21 +6,13 @@ VERSION=$(grep 'version:' pubspec.yaml | awk '{print $2}' | sed 's/+/-/')
 BUILD_DIR="build/web"
 DEPLOY_DIR="deploy"
 
-# ── Dependency checks ──────────────────────────────────────────
-for cmd in flutter jq rsync; do
-  if ! command -v $cmd &> /dev/null; then
-    echo "❌ $cmd not found. Please install it."
-    exit 1
-  fi
-done
-
-# ── Validate environment input ─────────────────────────────────
+# Validate environment input
 if [ "$ENV" != "dev" ] && [ "$ENV" != "prod" ]; then
-  echo "❌ Usage: ./build_web.sh [dev|prod]"
+  echo "❌ Usage: ./build_web_canvaskit.sh [dev|prod]"
   exit 1
 fi
 
-# ── Set base href and destination folder ───────────────────────
+# Set base href and destination folder
 if [ "$ENV" == "dev" ]; then
   BASE_HREF="/dev/"
   DEST_DIR="dev"
@@ -43,13 +34,9 @@ echo "🌐 Auth URL: $BASE_URL_AUTH"
 echo "🌐 Data URL: $BASE_URL_DATA"
 echo "📂 Output directory: $DEPLOY_DIR/$DEST_DIR"
 
-# ── Clean previous build ───────────────────────────────────────
-echo "🧹 Cleaning previous build..."
-rm -rf "$BUILD_DIR"
-
-# ── Build Flutter web (force HTML renderer via env var) ─────────
-echo "🏗️  Running Flutter build with HTML renderer..."
-FLUTTER_WEB_RENDERER=html flutter build web --release \
+# ── Build Flutter web (CanvasKit renderer) ──────────────────────
+echo "🏗️  Running Flutter build with CanvasKit renderer..."
+flutter build web --release \
   --base-href="$BASE_HREF" \
   --dart-define=BASE_URL_AUTH="$BASE_URL_AUTH" \
   --dart-define=BASE_URL_DATA="$BASE_URL_DATA" \
@@ -73,4 +60,4 @@ echo "📦 Copying build to deploy/$DEST_DIR..."
 mkdir -p "$DEPLOY_DIR/$DEST_DIR"
 rsync -av --exclude 'index.template.html' "$BUILD_DIR/" "$DEPLOY_DIR/$DEST_DIR/"
 
-echo "✅ Build complete for $ENV (HTML). Deployed to: $DEPLOY_DIR/$DEST_DIR"
+echo "✅ Build complete for $ENV (CanvasKit). Deployed to: $DEPLOY_DIR/$DEST_DIR"
