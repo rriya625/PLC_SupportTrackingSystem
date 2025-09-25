@@ -34,7 +34,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
   String longDescription = '';
   String customerReference = '';
   String sharepointLink = '';
-
+  String sendConfirmationTo = '';
   final ImagePicker _picker = ImagePicker();
   final List<dynamic> _attachedImages = [];
 
@@ -58,6 +58,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               longDescription = _parseRtf(data['LongDesc'] ?? '');
               customerReference = data['CustomerReference'] ?? '';
               sharepointLink = data['SharepointLink'] ?? '';
+              sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
             });
           } else {
             setState(() {
@@ -103,7 +104,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(width: 140, child: Text('Description:', style: const TextStyle(fontSize: 16))),
+                SizedBox(width: 180, child: Text('Description:', style: const TextStyle(fontSize: 16))),
                 //const Text('Description:', style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 2),
                 Expanded(child: Text(shortDescription, style: const TextStyle(fontSize: 16))),
@@ -113,6 +114,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
             _buildField('Customer Ref:', customerReference),
 
+            _buildField('Send Confirmation To:', sendConfirmationTo),
+
             // For clickable SharePoint link
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -120,8 +123,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(
-                    width: 140,
-                    child: Text('SharePoint:', style: TextStyle(fontSize: 16)),
+                    width: 180,
+                    child: Text('Sharepoint Link:', style: TextStyle(fontSize: 16)),
                   ),
                   Expanded(
                     child: GestureDetector(
@@ -151,7 +154,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
             const SizedBox(height: 12),
             Container(
-              height: 400,
+              height: 300,
               width: double.infinity,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black),
@@ -178,6 +181,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           if (kIsWeb) {
                             // Call the web-specific upload function
                             pickAndUploadFilesWeb(
+                              context: context,
                               ticketKey: int.tryParse(ticketKey) ?? 0,
                             );
                           } else {
@@ -426,6 +430,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             int.tryParse(ticketKey) ?? 0,
                             customerReference,
                             sharepointLink,
+                            sendConfirmationTo,
                           );
                         },
                         icon: const Icon(Icons.update),
@@ -479,7 +484,7 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 140, child: Text(label, style: const TextStyle(fontSize: 16))),
+          SizedBox(width: 180, child: Text(label, style: const TextStyle(fontSize: 16))),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
         ],
       ),
@@ -930,18 +935,32 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       int ticketKey,
       String currentCustomerRef,
       String currentSharepointLink,
+      String currentSendConfirmationTo, // 🔹 add parameter for existing value
       ) async {
+    final parentContext = context; // ✅ Save parent context
+
+    // Controllers
     final customerRefController = TextEditingController(text: currentCustomerRef);
     final sharepointLinkController = TextEditingController(text: currentSharepointLink);
+    final sendConfirmationController = TextEditingController(text: currentSendConfirmationTo);
+
+    // Focus node
+    final customerRefFocusNode = FocusNode();
 
     await showDialog(
-      context: context,
-      builder: (context) {
+      context: parentContext,
+      builder: (dialogContext) {
+        // ✅ Request focus once the dialog has been built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          customerRefFocusNode.requestFocus();
+        });
+
         Widget dialogContent = Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: customerRefController,
+              focusNode: customerRefFocusNode, // ✅ Attach focus node
               maxLength: 20,
               decoration: const InputDecoration(labelText: 'Customer Reference'),
             ),
@@ -951,6 +970,12 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               maxLength: 250,
               decoration: const InputDecoration(labelText: 'Sharepoint Link'),
             ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: sendConfirmationController,
+              maxLength: 50,
+              decoration: const InputDecoration(labelText: 'Send Confirmation To'),
+            ),
           ],
         );
 
@@ -958,54 +983,72 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
           title: const Text('Update Ticket'),
           content: SingleChildScrollView(
             child: kIsWeb
-                ? SizedBox(width: 400, child: dialogContent) // 💻 Web fixed width
+                ? SizedBox(width: 400, child: dialogContent)
                 : dialogContent,
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.blue[800],
+                foregroundColor: Colors.white,
+              ),
               onPressed: () async {
                 final updatedCustomerRef = customerRefController.text.trim();
                 final updatedSharepointLink = sharepointLinkController.text.trim();
+                final updatedSendConfirmationTo = sendConfirmationController.text.trim();
 
                 try {
                   final result = await APIHelper.updateTicket(
-                      ticketKey, updatedCustomerRef, updatedSharepointLink);
+                    ticketKey,
+                    updatedCustomerRef,
+                    updatedSharepointLink,
+                    updatedSendConfirmationTo, // 🔹 include in API call
+                  );
 
                   if (result['Code'] == 300) {
-                    Navigator.of(context).pop();
+                    Navigator.of(dialogContext).pop(); // ✅ Close dialog
 
                     final updatedData = await APIHelper.fetchTicketDetails(ticketKey.toString());
-                    if (updatedData != null && context.mounted) {
+                    if (updatedData != null && parentContext.mounted) {
                       setState(() {
                         ticketNumber = updatedData['TicketKey'] ?? '';
                         dateCreated = updatedData['StartDate'] ?? '';
                         assignedTo = updatedData['EmployeeName'] ?? 'N/A';
-                        currentStatus = (updatedData['Status'] == 'O') ? 'Open' : updatedData['Status'] ?? '';
+                        currentStatus = (updatedData['Status'] == 'O')
+                            ? 'Open'
+                            : updatedData['Status'] ?? '';
                         shortDescription = updatedData['ShortDesc'] ?? '';
                         longDescription = _parseRtf(updatedData['LongDesc'] ?? '');
                         customerReference = updatedData['CustomerReference'] ?? '';
                         sharepointLink = updatedData['SharepointLink'] ?? '';
+                        sendConfirmationTo = updatedData['ConfirmationEmailTo'] ?? '';
                       });
                     }
 
-                    await showMessageDialog(context, 'Successfully Updated');
+                    await showMessageDialog(parentContext, 'Successfully Updated');
                   } else {
-                    await showMessageDialog(context, 'Update failed: ${result['Message']}');
+                    await showMessageDialog(
+                        parentContext, 'Update failed: ${result['Message']}');
                   }
                 } catch (e) {
-                  await showMessageDialog(context, 'Error: $e');
+                  await showMessageDialog(parentContext, 'Error: $e');
                 }
               },
-              child: const Text('OK'),
+              child: const Text('Submit'),
             ),
           ],
         );
       },
     );
-  }
 
+    // ✅ Clean up controllers & focus node after dialog closes
+    customerRefController.dispose();
+    sharepointLinkController.dispose();
+    sendConfirmationController.dispose();
+    customerRefFocusNode.dispose();
+  }
 }

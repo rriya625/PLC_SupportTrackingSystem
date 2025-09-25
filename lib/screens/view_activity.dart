@@ -5,6 +5,7 @@ import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ViewActivityScreen extends StatefulWidget {
   final String ticketNumber;
@@ -42,8 +43,8 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
 
   void _showCreateActivityDialog() {
     String? selectedPriorityCode = '5';
-    TextEditingController messageController = TextEditingController();
-    FocusNode messageFocusNode = FocusNode();
+    final messageController = TextEditingController();
+    final messageFocusNode = FocusNode();
     bool isCritical = false;
     bool showPriorityError = false;
     bool showMessageError = false;
@@ -56,86 +57,63 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               messageFocusNode.requestFocus();
             });
+
+            final dialogContent = Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Priority'),
+                // ... your FutureBuilder for priority dropdown
+                const SizedBox(height: 12),
+                const Text('Message'),
+                TextField(
+                  controller: messageController,
+                  focusNode: messageFocusNode,
+                  maxLines: 4,
+                  maxLength: 4000,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (showMessageError)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Message is required',
+                      style: TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: isCritical,
+                      onChanged: (value) {
+                        setState(() {
+                          isCritical = value ?? false;
+                        });
+                      },
+                    ),
+                    const Text('Critical'),
+                  ],
+                ),
+              ],
+            );
+
             return AlertDialog(
               title: const Text('Create Activity'),
               content: SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: 400),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Priority'),
-                      FutureBuilder<List<Map<String, String>>>(
-                        future: APIHelper.getCodeList('PRIORITY'),
-                        builder: (context, snapshot) {
-                          if (!snapshot.hasData) {
-                            return const CircularProgressIndicator();
-                          }
-                          final options = snapshot.data!;
-                          return DropdownButton<String>(
-                            isExpanded: true,
-                            value: selectedPriorityCode,
-                            hint: const Text('Select...'),
-                            onChanged: (value) {
-                              setState(() {
-                                selectedPriorityCode = value;
-                              });
-                            },
-                            items: options.map((option) {
-                              return DropdownMenuItem<String>(
-                                value: option['Code'],
-                                child: Text('${option['Code']} - ${option['Description']}'),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
-                      if (showPriorityError)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Please select a priority',
-                            style: TextStyle(color: Colors.red, fontSize: 12),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      const Text('Message'),
-                      TextField(
-                        controller: messageController,
-                        focusNode: messageFocusNode,
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      if (showMessageError)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Message is required',
-                            style: TextStyle(color: Colors.red, fontSize: 12),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: isCritical,
-                            onChanged: (value) {
-                              setState(() {
-                                isCritical = value ?? false;
-                              });
-                            },
-                          ),
-                          const Text('Critical'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
+                child: kIsWeb
+                    ? SizedBox(width: 400, child: dialogContent)
+                    : dialogContent,
               ),
               actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel'),
+                ),
                 TextButton(
                   onPressed: () async {
                     setState(() {
@@ -144,8 +122,6 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                     });
 
                     if (showPriorityError || showMessageError) return;
-
-                    showUploadSpinner('Creating activity...');
 
                     final payload = {
                       "TicketKey": int.tryParse(widget.ticketNumber) ?? 0,
@@ -171,12 +147,11 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                         if (!context.mounted) return;
                         hideUploadSpinner();
                         Navigator.pop(context);
-                        fetchActivityData(); // ✅ Refresh list
+                        fetchActivityData(); // ✅ refresh activity list
                       } else {
                         debugPrint('❌ Failed to create activity: ${response.statusCode}');
                         debugPrint('Body: ${response.body}');
                         debugPrint('Payload: ${jsonEncode(payload)}');
-                        debugPrint('URL: ${url.toString()}');
                         if (context.mounted) {
                           hideUploadSpinner();
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -205,7 +180,11 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
           },
         );
       },
-    );
+    ).then((_) {
+      // ✅ Dispose after dialog is closed
+      messageController.dispose();
+      messageFocusNode.dispose();
+    });
   }
 
   @override
@@ -221,21 +200,36 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Activity Records for Ticket #${widget.ticketNumber} - ${widget.shortDescription}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Activities for Ticket #${widget.ticketNumber}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton(
+                      onPressed: _showCreateActivityDialog,
+                      child: const Text('Create Activity'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[800],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed: _showCreateActivityDialog,
-                  child: const Text('Create Activity'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[800],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
+                const SizedBox(height: 4),
+                Text(
+                  widget.shortDescription,
+                  style: const TextStyle(fontSize: 16),
                 ),
               ],
             ),

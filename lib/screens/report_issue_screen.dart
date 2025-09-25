@@ -138,9 +138,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     super.initState();
     // Pre-fill the confirmation to controller with the email address.
     _confirmationToController.text = Constants.emailAddress;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _shortDescFocus.requestFocus();
-    });
+
+     WidgetsBinding.instance.addPostFrameCallback((_) {
+       _shortDescFocus.requestFocus();
+     });
     _loadPriorityOptions();
   }
 
@@ -191,7 +192,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               ),
 
               const SizedBox(height: 16),
-              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, focusNode: _shortDescFocus, maxLength: 250),
+              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, maxLength: 250, focusNode: _shortDescFocus),
               const SizedBox(height: 16),
               _buildTextField(
                 label: 'Detailed Description',
@@ -227,6 +228,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                                 print("📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes");
                               }
                               if (mounted) {
+                                hideUploadSpinner();
                                 _showWebFilesPreviewDialog();
                               }
                             },

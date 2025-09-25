@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:flutter/foundation.dart';
 
+
 /// APIHelper
 ///
 /// Centralizes all HTTP-based service calls for the application, including:
@@ -53,6 +54,10 @@ class APIHelper {
   ///
   /// Returns error message string if failed, or fetchUserInfo() result on success.
   static Future<dynamic> loginUser(String userId, String password) async {
+
+    print("Auth URL: " + Constants.baseUrlAuth);
+    print("Interface URL: " + Constants.baseUrlData);
+
     final loginUri = Uri.parse('${Constants.baseUrlAuth}GetAccessToken');
 
     final response = await http.post(
@@ -812,7 +817,12 @@ class APIHelper {
     });
   }
 
-  static Future<Map<String, dynamic>> updateTicket(int ticketKey, String customerReference, String sharepointLink) async {
+  static Future<Map<String, dynamic>> updateTicket(
+      int ticketKey,
+      String customerReference,
+      String sharepointLink,
+      String sendConfirmationTo, // 🔹 positional
+      ) async {
     final url = Uri.parse('${Constants.baseUrlData}UpdateTicket');
 
     final headers = {
@@ -821,19 +831,21 @@ class APIHelper {
       'Content-Type': 'application/json',
     };
 
-    final body = jsonEncode({
+    final payload = {
       'TicketKey': ticketKey,
       'CustomerReference': customerReference,
       'SharepointLink': sharepointLink,
-    });
+      'ConfirmationEmailTo': sendConfirmationTo,
+    };
+
+    final body = jsonEncode(payload);
 
     final response = await http.post(url, headers: headers, body: body);
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to update ticket: ${response.statusCode}');
+      throw Exception('Failed to update ticket: ${response.statusCode} → ${response.body}');
     }
   }
-
 }

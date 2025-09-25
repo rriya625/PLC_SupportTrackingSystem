@@ -15,7 +15,7 @@ class SendMessageScreen extends StatefulWidget {
 
 class _SendMessageScreenState extends State<SendMessageScreen> {
   final TextEditingController _messageController = TextEditingController();
-  final FocusNode _messageFocusNode = FocusNode(); // ✅ New focus node
+  final FocusNode _messageFocusNode = FocusNode();
 
   String _name = '';
   List<String> _messageToOptions = [];
@@ -29,9 +29,10 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     _fetchMessageToList();
 
     // ✅ Autofocus after build
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+     WidgetsBinding.instance.addPostFrameCallback((_) {
       _messageFocusNode.requestFocus();
     });
+
   }
 
   @override
@@ -179,7 +180,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _messageController,
-                  focusNode: _messageFocusNode, // ✅ Apply focus node
+                  focusNode: _messageFocusNode,
                   maxLines: 12,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -187,19 +188,42 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _sendMessage,
-                    icon: const Icon(Icons.send),
-                    label: const Text('Submit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Cancel Button
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // or Navigator.of(context).maybePop();
+                        },
+                        icon: const Icon(Icons.cancel),
+                        label: const Text('Cancel'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+
+                    // Submit Button
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _sendMessage,
+                        icon: const Icon(Icons.send),
+                        label: const Text('Submit'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlueAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 60),
               ],

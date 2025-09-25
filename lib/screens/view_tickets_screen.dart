@@ -296,20 +296,35 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ExpansionTile(
-              initiallyExpanded: _filtersExpanded,
-              title: const Text('Search Filters'),
-              trailing: Icon(_filtersExpanded ? Icons.expand_less : Icons.expand_more),
-              onExpansionChanged: (expanded) => setState(() => _filtersExpanded = expanded),
-              children: [_buildFilters()],
+            // Custom expandable header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Search Filters',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                IconButton(
+                  icon: Icon(_filtersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+                  onPressed: () {
+                    setState(() => _filtersExpanded = !_filtersExpanded);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
+            // Expanded filter UI
+            if (_filtersExpanded) ...[
+              _buildFilters(),
+              const SizedBox(height: 20),
+            ],
 
             Text(
               'Total Tickets: ${tickets.length}',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey[700]),
             ),
             const SizedBox(height: 10),
+
+            // Ticket list
             Expanded(
               child: ListView.builder(
                 itemCount: tickets.length,
@@ -327,7 +342,6 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                     },
                     child: _buildTicketCard(
                       ticketKey: ticket['TicketKey'] ?? '',
-                      //date: ticket['StartDate'] ?? '',
                       date: 'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
                       shortDesc: ticket['ShortDesc'] ?? '',
                     ),
@@ -518,14 +532,14 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
               // Right: Buttons with vertical alignment fix
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 24.0), // 👈 Adjust this value as needed
+                  padding: const EdgeInsets.only(top: 30.0), // 👈 Adjust this value as needed
                   child: Align(
-                    alignment: Alignment.topRight,
+                    alignment: Alignment.topLeft,
                     child: Wrap(
-                      spacing: 12,
+                      spacing: 6,
                       children: [
                         SizedBox(
-                          width: 96,
+                          width: 85,
                           child: ElevatedButton(
                             onPressed: _fetchAndSetTickets,
                             style: ElevatedButton.styleFrom(
@@ -538,11 +552,11 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                           ),
                         ),
                         SizedBox(
-                          width: 96,
+                          width: 85,
                           child: ElevatedButton(
                             onPressed: _exportToExcel,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.greenAccent,
+                              backgroundColor: Colors.lightBlueAccent, //greenAccent,
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

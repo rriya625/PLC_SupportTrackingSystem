@@ -5,8 +5,8 @@ import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/home_screen.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-// import '../utils/log_helper.dart';
 import '../utils/web_log_helper.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 class LoginScreen extends StatefulWidget {
   final TextEditingController userIdController = TextEditingController();
@@ -27,7 +27,12 @@ class _LoginScreenState extends State<LoginScreen> {
     Constants.userID = 0;
     _loadVersion();
 
-    // Focus the User ID field after build
+    // ✅ Prefill only when debugging locally in DEV
+    if (kDebugMode && Constants.isDev) {
+      widget.userIdController.text = "12819";
+      widget.passwordController.text = "6779";
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       userIdFocusNode.requestFocus();
     });
@@ -38,6 +43,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _version = '${info.version}+${info.buildNumber}';
     });
+  }
+
+  @override
+  void dispose() {
+    userIdFocusNode.dispose();
+    widget.userIdController.dispose();
+    widget.passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -127,6 +140,46 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
+          // ✅ Watermark for dev builds
+          if (Constants.isDev)
+            IgnorePointer(
+              child: Stack(
+                children: [
+                  Center(
+                    child: Transform.rotate(
+                      angle: -0.7,
+                      child: Text(
+                        "DEVELOPMENT",
+                        style: TextStyle(
+                          fontSize: Constants.isMobileWeb ? 40 : 80,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.withOpacity(0.12),
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Transform.translate(
+                      offset: const Offset(0, -200),
+                      child: Transform.rotate(
+                        angle: -0.7,
+                        child: Text(
+                          "DEVELOPMENT",
+                          style: TextStyle(
+                            fontSize: Constants.isMobileWeb ? 40 : 80,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.withOpacity(0.12),
+                            letterSpacing: 4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // Version footer
           Align(
             alignment: Alignment.bottomLeft,
@@ -199,8 +252,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Builds a labeled TextField
-  Widget buildTextField(String label, TextEditingController controller,
-      {bool obscure = false, FocusNode? focusNode}) {
+  Widget buildTextField(
+      String label,
+      TextEditingController controller, {
+        bool obscure = false,
+        FocusNode? focusNode,
+      }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
