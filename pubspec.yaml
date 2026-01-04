@@ -45,6 +45,10 @@ dependencies:
   syncfusion_flutter_pdfviewer: 25.2.4
   syncfusion_pdfviewer_web: 25.2.4
   syncfusion_pdfviewer_platform_interface: 25.2.4
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:

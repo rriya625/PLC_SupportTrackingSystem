@@ -1,0 +1,57 @@
+import 'dart:html' as html;
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:ticket_tracker_app/constants.dart';
+
+class FileDownloadHelper {
+  static const String _supportMessage =
+      'Unable to download. Please call Support @ (847) 985 2060';
+
+  static Future<void> downloadUserManual(BuildContext context) async {
+    final url = Constants.manualDownloadUrl;
+    if (url == null || url.isEmpty) {
+      await _showError(context, _supportMessage);
+      return;
+    }
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final contentType = response.headers['content-type'] ?? '';
+        if (contentType.toLowerCase().contains('pdf')) {
+          final blob = html.Blob([response.bodyBytes]);
+          final urlBlob = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: urlBlob)
+            ..download = "UserManual.pdf"
+            ..click();
+          html.Url.revokeObjectUrl(urlBlob);
+          print('[FileDownloadHelper] UserManual.pdf downloaded via browser.');
+        } else {
+          await _showError(context, _supportMessage);
+        }
+      } else {
+        await _showError(context, _supportMessage);
+      }
+    } catch (e) {
+      print('[FileDownloadHelper] Exception: $e');
+      await _showError(context, _supportMessage);
+    }
+  }
+
+  static Future<void> _showError(BuildContext context, String message) async {
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Download Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          )
+        ],
+      ),
+    );
+  }
+}
