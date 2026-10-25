@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ticket_tracker_app/screens/report_issue_screen.dart';
 import 'package:ticket_tracker_app/screens/view_tickets_screen.dart';
+import 'messages_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
@@ -75,6 +76,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
+                    _buildMainButton(
+                      icon: Icons.mail_outline,
+                      label: 'Messages',
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MessagesScreen())),
+                    ),
+                    const SizedBox(height: 20),
                     _buildMainButton(
                       icon: Icons.search,
                       label: 'View Tickets',
