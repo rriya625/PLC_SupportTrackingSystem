@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
-Future<void> pickAndUploadFilesWeb({required int ticketKey}) async {
+Future<void> pickAndUploadFilesWeb({
+  required BuildContext context,
+  required int ticketKey,
+}) async {
   debugPrint('❌ pickAndUploadFilesWeb is not supported on this platform.');
 }
 
@@ -28,6 +31,9 @@ void pickFilesForWeb({
   print("📱 pickFilesForWeb is not supported on mobile");
 }
 
-Future<void> uploadPickedFilesWeb(int ticketKey, List<Map<String, dynamic>> files) async {
+Future<void> uploadPickedFilesWeb(
+  int ticketKey,
+  List<Map<String, dynamic>> files,
+) async {
   print("📱 uploadPickedFilesWeb is not supported on mobile");
 }

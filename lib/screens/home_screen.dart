@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'package:ticket_tracker_app/screens/login_screen.dart';
 import 'package:ticket_tracker_app/utils/file_download_helper.dart';
 import 'package:ticket_tracker_app/utils/web_log_helper.dart';
+import 'package:ticket_tracker_app/widgets/build_version_label.dart';
 
 /// Home screen shown after successful login.
 /// Displays navigation buttons and support contact info with branding.
@@ -28,14 +29,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {});
     _loadUserInfo();
   }
 
   void _loadUserInfo() async {
-    await Future.delayed(Duration(milliseconds: 100)); // wait for nav to complete
+    await Future.delayed(
+      Duration(milliseconds: 100),
+    ); // wait for nav to complete
     if (!mounted) return;
     setState(() {
       print("Loaded contact name from Constants: '${Constants.contactName}'");
@@ -80,7 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => ViewTicketsScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => ViewTicketsScreen(),
+                          ),
                         );
                       },
                     ),
@@ -91,7 +94,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => ReportIssueScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => ReportIssueScreen(),
+                          ),
                         );
                       },
                     ),
@@ -120,8 +125,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Download User Manual',
                       onTap: () async {
                         await FileDownloadHelper.downloadUserManual(context);
-                        await WebLogHelper.log("User attempted manual download");
-                      },                    ),
+                        await WebLogHelper.log(
+                          "User attempted manual download",
+                        );
+                      },
+                    ),
                     const SizedBox(height: 20),
                     _buildMainButton(
                       icon: Icons.logout,
@@ -133,8 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         Navigator.pushAndRemoveUntil(
                           context,
-                          MaterialPageRoute(builder: (context) =>  LoginScreen()),
-                              (route) => false,
+                          MaterialPageRoute(
+                            builder: (context) => LoginScreen(),
+                          ),
+                          (route) => false,
                         );
                       },
                     ),
@@ -145,10 +155,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             !isMobile()
                 ? Image.asset(
-                  'assets/beast.png',
-                  height: 140,
-                  fit: BoxFit.contain,
-                )
+                    'assets/beast.png',
+                    height: 140,
+                    fit: BoxFit.contain,
+                  )
                 : const SizedBox.shrink(),
             const SizedBox(height: 20),
           ],
@@ -179,7 +189,10 @@ class _HomeScreenState extends State<HomeScreen> {
           if (Constants.isDev)
             IgnorePointer(
               child: Transform.translate(
-                offset: const Offset(0, -50), // ✅ shift entire watermark group upward
+                offset: const Offset(
+                  0,
+                  -50,
+                ), // ✅ shift entire watermark group upward
                 child: Stack(
                   children: [
                     // Center watermark (now higher)
@@ -200,7 +213,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Second watermark (even higher)
                     Center(
                       child: Transform.translate(
-                        offset: const Offset(0, -200), // extra shift above the first one
+                        offset: const Offset(
+                          0,
+                          -200,
+                        ), // extra shift above the first one
                         child: Transform.rotate(
                           angle: -0.7,
                           child: Text(
@@ -219,6 +235,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          const Align(
+            alignment: Alignment.bottomLeft,
+            child: BuildVersionLabel(),
+          ),
         ],
       ),
     );
@@ -239,7 +259,9 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: Colors.lightBlueAccent,
           foregroundColor: Colors.black,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
         onPressed: onTap,
       ),
@@ -263,9 +285,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showUpdatePasswordDialog() {
-    final TextEditingController currentPasswordController = TextEditingController();
+    final TextEditingController currentPasswordController =
+        TextEditingController();
     final TextEditingController newPasswordController = TextEditingController();
-    final TextEditingController confirmPasswordController = TextEditingController();
+    final TextEditingController confirmPasswordController =
+        TextEditingController();
     final FocusNode newPasswordFocusNode = FocusNode(); // ✅ Focus node added
 
     showDialog(
@@ -282,124 +306,163 @@ class _HomeScreenState extends State<HomeScreen> {
             return AlertDialog(
               title: const Text('Change Password'),
               constraints: BoxConstraints(
-                minWidth: math.min(500.0, MediaQuery.of(context).size.width * 0.6),
+                minWidth: math.min(
+                  500.0,
+                  MediaQuery.of(context).size.width * 0.6,
+                ),
                 maxWidth: MediaQuery.of(context).size.width * 0.8,
               ),
               content: kIsWeb
                   ? SizedBox(
-                width: 400,
-                height: MediaQuery.of(context).size.height * 0.4, // ✅ 40% screen height on web
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: currentPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: 'Current Password'),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Text(
-                          'Password must be at least 8 characters,\ninclude an uppercase letter, a lowercase letter,\nand one special character (! @ # \$ & * ~).',
-                          style: const TextStyle(fontSize: 12, color: Colors.black87),
-                        ),
-                      ),
-                      TextField(
-                        controller: newPasswordController,
-                        focusNode: newPasswordFocusNode,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: 'New Password'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: confirmPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: 'Confirm New Password'),
-                      ),
-                      if (errorText != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12.0),
-                          child: Text(
-                            errorText!,
-                            style: TextStyle(
-                              color: errorText!.toLowerCase().contains('success')
-                                  ? Colors.green
-                                  : Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              )
-                  : Center(
-                child: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 600),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextField(
-                          controller: currentPasswordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(labelText: 'Current Password'),
-                        ),
-                        const SizedBox(height: 12),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: Text(
-                            'Password must be at least 8 characters,\ninclude an uppercase letter, a lowercase letter,\nand one special character (! @ # \$ & * ~).',
-                            style: const TextStyle(fontSize: 12, color: Colors.black87),
-                          ),
-                        ),
-                        TextField(
-                          controller: newPasswordController,
-                          focusNode: newPasswordFocusNode,
-                          obscureText: true,
-                          decoration: const InputDecoration(labelText: 'New Password'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: confirmPasswordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(labelText: 'Confirm New Password'),
-                        ),
-                        if (errorText != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: Text(
-                              errorText!,
-                              style: TextStyle(
-                                color: errorText!.toLowerCase().contains('success')
-                                    ? Colors.green
-                                    : Colors.red,
-                                fontWeight: FontWeight.bold,
+                      width: 400,
+                      height:
+                          MediaQuery.of(context).size.height *
+                          0.4, // ✅ 40% screen height on web
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: currentPasswordController,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Current Password',
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: Text(
+                                'Password must be at least 8 characters,\ninclude an uppercase letter, a lowercase letter,\nand one special character (! @ # \$ & * ~).',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            TextField(
+                              controller: newPasswordController,
+                              focusNode: newPasswordFocusNode,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                labelText: 'New Password',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: confirmPasswordController,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Confirm New Password',
+                              ),
+                            ),
+                            if (errorText != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12.0),
+                                child: Text(
+                                  errorText!,
+                                  style: TextStyle(
+                                    color:
+                                        errorText!.toLowerCase().contains(
+                                          'success',
+                                        )
+                                        ? Colors.green
+                                        : Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 600),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextField(
+                                controller: currentPasswordController,
+                                obscureText: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Current Password',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8.0),
+                                child: Text(
+                                  'Password must be at least 8 characters,\ninclude an uppercase letter, a lowercase letter,\nand one special character (! @ # \$ & * ~).',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              TextField(
+                                controller: newPasswordController,
+                                focusNode: newPasswordFocusNode,
+                                obscureText: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'New Password',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: confirmPasswordController,
+                                obscureText: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'Confirm New Password',
+                                ),
+                              ),
+                              if (errorText != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 12.0),
+                                  child: Text(
+                                    errorText!,
+                                    style: TextStyle(
+                                      color:
+                                          errorText!.toLowerCase().contains(
+                                            'success',
+                                          )
+                                          ? Colors.green
+                                          : Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
-                      ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
               actions: [
                 TextButton(
                   onPressed: () async {
-                    final currentPassword = currentPasswordController.text.trim();
+                    final currentPassword = currentPasswordController.text
+                        .trim();
                     final newPassword = newPasswordController.text.trim();
-                    final confirmPassword = confirmPasswordController.text.trim();
+                    final confirmPassword = confirmPasswordController.text
+                        .trim();
 
                     if (newPassword == currentPassword) {
-                      setState(() => errorText = 'New password cannot be the same as your current password.');
+                      setState(
+                        () => errorText =
+                            'New password cannot be the same as your current password.',
+                      );
                       return;
                     }
 
-                    final passwordPattern = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#\$&*~]).{8,}$');
+                    final passwordPattern = RegExp(
+                      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*[!@#\$&*~]).{8,}$',
+                    );
                     if (!passwordPattern.hasMatch(newPassword)) {
-                      setState(() => errorText = 'Password does not meet requirements.');
+                      setState(
+                        () =>
+                            errorText = 'Password does not meet requirements.',
+                      );
                       return;
                     }
                     if (newPassword != confirmPassword) {
@@ -417,14 +480,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       if (result.toLowerCase().contains('success') ||
                           result.toLowerCase().contains('password updated')) {
-                        await showMessageDialog(context, 'Password changed successfully.');
+                        await showMessageDialog(
+                          context,
+                          'Password changed successfully.',
+                        );
                         if (context.mounted) Navigator.of(context).pop();
                       } else {
                         setState(() => errorText = result);
                       }
                     } catch (e) {
                       if (!context.mounted) return;
-                      setState(() => errorText = 'Failed to update password: $e');
+                      setState(
+                        () => errorText = 'Failed to update password: $e',
+                      );
                     }
                   },
                   child: const Text('Submit'),

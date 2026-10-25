@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/home_screen.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:ticket_tracker_app/widgets/build_version_label.dart';
 import '../utils/web_log_helper.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 
 class LoginScreen extends StatefulWidget {
   final TextEditingController userIdController = TextEditingController();
@@ -17,31 +15,21 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _invalidLoginMessage =
+      'Invalid login, please check your user id and password and try again. '
+      'If you are still experiencing issues, please contact the Porter Lee '
+      'Support line to reset your password.';
+
   final ValueNotifier<String?> errorNotifier = ValueNotifier(null);
   final FocusNode userIdFocusNode = FocusNode();
-  String _version = '';
-
   @override
   void initState() {
     super.initState();
     Constants.userID = 0;
-    _loadVersion();
-
-    // ✅ Prefill only when debugging locally in DEV
-    if (kDebugMode && Constants.isDev) {
-      widget.userIdController.text = "12819";
-      widget.passwordController.text = "6779";
-    }
-
+    Constants.userType = '';
+    Constants.accessLevel = '';
     WidgetsBinding.instance.addPostFrameCallback((_) {
       userIdFocusNode.requestFocus();
-    });
-  }
-
-  Future<void> _loadVersion() async {
-    final info = await PackageInfo.fromPlatform();
-    setState(() {
-      _version = '${info.version}+${info.buildNumber}';
     });
   }
 
@@ -64,77 +52,90 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: 500),
-                child: Column(
-                  children: [
-                    Text(
-                      'Porter Lee Corporation',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Comic Sans MS',
-                        color: Colors.blue[800],
+                child: AutofillGroup(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Porter Lee Corporation',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Comic Sans MS',
+                          color: Colors.blue[800],
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: 20),
-                    Container(
-                      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.lightBlueAccent.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(10),
+                      SizedBox(height: 20),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          vertical: 10,
+                          horizontal: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.lightBlueAccent.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Customer Support System',
+                          style: TextStyle(fontSize: 18),
+                        ),
                       ),
-                      child: Text(
-                        'Customer Support System',
-                        style: TextStyle(fontSize: 18),
+                      SizedBox(height: 30),
+
+                      // User ID
+                      buildTextField(
+                        'User ID:',
+                        widget.userIdController,
+                        focusNode: userIdFocusNode,
+                        autofillHints: const [AutofillHints.username],
+                        textInputAction: TextInputAction.next,
                       ),
-                    ),
-                    SizedBox(height: 30),
+                      SizedBox(height: 10),
 
-                    // User ID
-                    buildTextField(
-                      'User ID:',
-                      widget.userIdController,
-                      focusNode: userIdFocusNode,
-                    ),
-                    SizedBox(height: 10),
+                      // Password
+                      buildTextField(
+                        'Password:',
+                        widget.passwordController,
+                        obscure: true,
+                        autofillHints: const [AutofillHints.password],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _handleLogin(),
+                      ),
+                      SizedBox(height: 20),
 
-                    // Password
-                    buildTextField(
-                      'Password:',
-                      widget.passwordController,
-                      obscure: true,
-                    ),
-                    SizedBox(height: 20),
+                      // Error Message
+                      ValueListenableBuilder<String?>(
+                        valueListenable: errorNotifier,
+                        builder: (context, errorText, child) {
+                          if (errorText == null) return SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              errorText,
+                              style: TextStyle(color: Colors.red, fontSize: 14),
+                            ),
+                          );
+                        },
+                      ),
 
-                    // Error Message
-                    ValueListenableBuilder<String?>(
-                      valueListenable: errorNotifier,
-                      builder: (context, errorText, child) {
-                        if (errorText == null) return SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            errorText,
-                            style: TextStyle(color: Colors.red, fontSize: 14),
+                      // Login Button
+                      ElevatedButton(
+                        onPressed: _handleLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlueAccent,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 40,
+                            vertical: 12,
                           ),
-                        );
-                      },
-                    ),
-
-                    // Login Button
-                    ElevatedButton(
-                      onPressed: _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.lightBlueAccent,
-                        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                        ),
+                        child: Text('Login', style: TextStyle(fontSize: 16)),
                       ),
-                      child: Text('Login', style: TextStyle(fontSize: 16)),
-                    ),
-                    SizedBox(height: 30),
+                      SizedBox(height: 30),
 
-                    // Logo
-                    Image.asset('assets/beast.png', height: 220),
-                  ],
+                      // Logo
+                      Image.asset('assets/beast.png', height: 220),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -180,17 +181,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-          // Version footer
-          Align(
+          const Align(
             alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'Version: $_version',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
-            ),
-          )
+            child: BuildVersionLabel(),
+          ),
         ],
       ),
     );
@@ -212,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
       errorNotifier.value = 'Please enter your Password.';
       return;
     } else if (int.tryParse(userId) == null) {
-      errorNotifier.value = 'Invalid Login';
+      errorNotifier.value = _invalidLoginMessage;
       return;
     } else {
       errorNotifier.value = null;
@@ -221,12 +215,16 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final dynamic response = await APIHelper.loginUser(userId, password);
 
-      if (response is Map && response.containsKey('method') && response['method'] == 'OPTIONS') {
-        errorNotifier.value = 'API Error: Expected POST but received an OPTIONS preflight (CORS).';
+      if (response is Map &&
+          response.containsKey('method') &&
+          response['method'] == 'OPTIONS') {
+        errorNotifier.value =
+            'API Error: Expected POST but received an OPTIONS preflight (CORS).';
         return;
       }
 
       if (response == null) {
+        TextInput.finishAutofillContext();
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen()),
@@ -235,16 +233,22 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       if (response is String) {
-        errorNotifier.value = response;
-      } else if (response is Map && response.containsKey('Code') && response.containsKey('Message')) {
-        errorNotifier.value = 'Error ${response['Code']}: ${response['Message']}';
+        errorNotifier.value = _invalidLoginMessage;
+      } else if (response is Map &&
+          response.containsKey('Code') &&
+          response.containsKey('Message')) {
+        errorNotifier.value =
+            'Error ${response['Code']}: ${response['Message']}';
       } else {
         errorNotifier.value = 'Unexpected error. Please try again.';
       }
     } catch (e) {
       final msg = e.toString();
-      if (msg.contains('XMLHttpRequest error') || msg.contains('CORS') || msg.contains('Failed to fetch')) {
-        errorNotifier.value = 'API Error: CORS issue. Ask server to allow POST requests.';
+      if (msg.contains('XMLHttpRequest error') ||
+          msg.contains('CORS') ||
+          msg.contains('Failed to fetch')) {
+        errorNotifier.value =
+            'API Error: CORS issue. Ask server to allow POST requests.';
       } else {
         errorNotifier.value = 'Network error: $msg';
       }
@@ -253,11 +257,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Builds a labeled TextField
   Widget buildTextField(
-      String label,
-      TextEditingController controller, {
-        bool obscure = false,
-        FocusNode? focusNode,
-      }) {
+    String label,
+    TextEditingController controller, {
+    bool obscure = false,
+    FocusNode? focusNode,
+    Iterable<String>? autofillHints,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -266,6 +273,11 @@ class _LoginScreenState extends State<LoginScreen> {
           controller: controller,
           obscureText: obscure,
           focusNode: focusNode,
+          autofillHints: autofillHints,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
+          autocorrect: false,
+          enableSuggestions: !obscure,
           decoration: InputDecoration(
             border: OutlineInputBorder(),
             contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),

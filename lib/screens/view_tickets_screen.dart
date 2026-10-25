@@ -3,9 +3,9 @@ import 'ticket_description_screen.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:ticket_tracker_app/utils/web_download_helper.dart' if (dart.library.html) 'package:ticket_tracker_app/utils/web_download_helper.dart';
+import 'package:ticket_tracker_app/utils/web_download_helper_stub.dart'
+    if (dart.library.html) 'package:ticket_tracker_app/utils/web_download_helper.dart';
 
 class ViewTicketsScreen extends StatefulWidget {
   const ViewTicketsScreen({Key? key}) : super(key: key);
@@ -22,6 +22,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   List<Map<String, dynamic>> tickets = [];
+
+  List<Map<String, String>> departments = [];
+  String? selectedDepartmentCode;
+  bool isDepartmentLoading = true;
 
   DateTime? fromDate;
   DateTime? toDate;
@@ -41,13 +45,92 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     final now = DateTime.now();
     fromDate = now.subtract(const Duration(days: 365));
     toDate = now;
+    ticketType = Constants.isEmployee ? 'Department' : 'Yours';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       searchFocusNode.requestFocus();
     });
 
-    _fetchTicketGroups();
-    _fetchAndSetTickets();
+    _initializeSearch();
+  }
+
+  Future<void> _initializeSearch() async {
+    await Future.wait([_fetchDepartments(), _fetchTicketGroups()]);
+    if (mounted) await _fetchAndSetTickets();
+  }
+
+  Future<void> _fetchDepartments() async {
+    if (mounted) setState(() => isDepartmentLoading = true);
+    try {
+      final data = await APIHelper.getCodeList('CUSTOMER');
+      final validDepartments = data
+          .where((item) => (item['Code'] ?? '').trim().isNotEmpty)
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        if (Constants.isEmployee) {
+          departments = [
+            {'Code': '', 'Description': 'All Departments'},
+            ...validDepartments,
+          ];
+          selectedDepartmentCode = '';
+        } else {
+          final ownDepartment = validDepartments.where(
+            (item) => item['Code'] == Constants.qbLinkKey,
+          );
+          departments = ownDepartment.isNotEmpty
+              ? [ownDepartment.first]
+              : [
+                  {
+                    'Code': Constants.qbLinkKey,
+                    'Description': Constants.departmentName,
+                  },
+                ];
+          selectedDepartmentCode = Constants.qbLinkKey;
+        }
+      });
+    } catch (error) {
+      debugPrint('Error fetching departments: $error');
+      if (!mounted) return;
+      setState(() {
+        departments = [
+          {
+            'Code': Constants.qbLinkKey,
+            'Description': Constants.departmentName,
+          },
+        ];
+        selectedDepartmentCode = Constants.qbLinkKey;
+      });
+    } finally {
+      if (mounted) setState(() => isDepartmentLoading = false);
+    }
+  }
+
+  String? get _departmentCodeForRequest {
+    if (!Constants.isEmployee) return Constants.qbLinkKey;
+    final code = selectedDepartmentCode?.trim() ?? '';
+    return code.isEmpty ? null : code;
+  }
+
+  bool get _isUnboundedDepartmentSearch {
+    final hasSearchValue =
+        searchController.text.trim().isNotEmpty &&
+        (searchBy == 'Ticket #' || searchBy == 'Description');
+    return Constants.isEmployee &&
+        ticketType == 'Department' &&
+        _departmentCodeForRequest == null &&
+        !hasSearchValue;
+  }
+
+  Future<bool> _validateDepartmentScope() async {
+    if (!_isUnboundedDepartmentSearch) return true;
+    await showMessageDialog(
+      context,
+      'All Departments can return too many tickets. Enter a Ticket # or '
+      'Description before searching.',
+    );
+    return false;
   }
 
   Future<void> _fetchTicketGroups() async {
@@ -61,12 +144,15 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
 
       //print("Raw ticket group data from API (${data.length} entries):");
       //for (var group in data) {
-       // print(" 1 - Code: ${group['Code']}, Description: ${group['Description']}");
+      // print(" 1 - Code: ${group['Code']}, Description: ${group['Description']}");
       //}
 
       setState(() {
         final validGroups = data
-            .where((g) => g['Code'] != null && g['Code'].toString().trim().isNotEmpty)
+            .where(
+              (g) =>
+                  g['Code'] != null && g['Code'].toString().trim().isNotEmpty,
+            )
             .toList();
 
         //print("Filtered valid ticket groups (${validGroups.length}):");
@@ -90,7 +176,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Future<void> _pickDate(BuildContext context, bool isFromDate) async {
-    final initialDate = isFromDate ? fromDate ?? DateTime.now() : toDate ?? DateTime.now();
+    final initialDate = isFromDate
+        ? fromDate ?? DateTime.now()
+        : toDate ?? DateTime.now();
     final newDate = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -109,6 +197,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Future<void> _fetchAndSetTickets() async {
+    if (!await _validateDepartmentScope()) return;
     if (fromDate != null && toDate != null && fromDate!.isAfter(toDate!)) {
       setState(() {
         dateErrorText = 'From Date cannot be after To Date.';
@@ -123,7 +212,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         });
 
         if (context.mounted) {
-          await showMessageDialog(context, 'Please enter a valid numeric Ticket #');
+          await showMessageDialog(
+            context,
+            'Please enter a valid numeric Ticket #',
+          );
           FocusScope.of(context).requestFocus(searchFocusNode);
         }
         return;
@@ -166,14 +258,14 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         fromDate: fromDate != null ? _formatApiDate(fromDate!) : '',
         toDate: toDate != null ? _formatApiDate(toDate!) : '',
         ticketGroupCode: selectedTicketGroup ?? '',
+        departmentCode: _departmentCodeForRequest,
       );
       setState(() {
         tickets = data;
       });
 
       Navigator.of(context, rootNavigator: true).pop();
-    }
-    catch (e) {
+    } catch (e) {
       Navigator.of(context, rootNavigator: true).pop();
       setState(() {
         tickets.clear(); // clear ticket list on error
@@ -183,6 +275,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Future<void> _exportToExcel() async {
+    if (!await _validateDepartmentScope()) return;
     if (fromDate != null && toDate != null && fromDate!.isAfter(toDate!)) {
       setState(() {
         dateErrorText = 'From Date cannot be after To Date.';
@@ -197,7 +290,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         });
 
         if (context.mounted) {
-          await showMessageDialog(context, 'Please enter a valid numeric Ticket #');
+          await showMessageDialog(
+            context,
+            'Please enter a valid numeric Ticket #',
+          );
           FocusScope.of(context).requestFocus(searchFocusNode);
         }
         return;
@@ -246,22 +342,31 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         fromDate: from,
         toDate: to,
         ticketGroupCode: ticketGroup,
+        departmentCode: _departmentCodeForRequest,
       );
 
       Navigator.of(context, rootNavigator: true).pop(); // close dialog
 
       if (response.statusCode == 200) {
         if (kIsWeb) {
-          final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+          final timestamp = DateTime.now().toIso8601String().replaceAll(
+            ':',
+            '-',
+          );
           final filename = "tickets_export_$timestamp.csv";
           downloadCSVWeb(response.bodyBytes, filename);
-        }
-        else {
-          await showMessageDialog(context, 'Export successful (received file).');
+        } else {
+          await showMessageDialog(
+            context,
+            'Export successful (received file).',
+          );
           // TODO: Save to file on mobile
         }
       } else {
-        await showMessageDialog(context, 'Failed to export. (${response.statusCode})');
+        await showMessageDialog(
+          context,
+          'Failed to export. (${response.statusCode})',
+        );
       }
     } catch (e) {
       Navigator.of(context, rootNavigator: true).pop();
@@ -305,7 +410,11 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 IconButton(
-                  icon: Icon(_filtersExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+                  icon: Icon(
+                    _filtersExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
                   onPressed: () {
                     setState(() => _filtersExpanded = !_filtersExpanded);
                   },
@@ -320,7 +429,11 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
 
             Text(
               'Total Tickets: ${tickets.length}',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.grey[700]),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[700],
+              ),
             ),
             const SizedBox(height: 10),
 
@@ -335,14 +448,18 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const TicketDescriptionScreenStateful(),
-                          settings: RouteSettings(arguments: ticket['TicketKey']),
+                          builder: (context) =>
+                              const TicketDescriptionScreenStateful(),
+                          settings: RouteSettings(
+                            arguments: ticket['TicketKey'],
+                          ),
                         ),
                       );
                     },
                     child: _buildTicketCard(
                       ticketKey: ticket['TicketKey'] ?? '',
-                      date: 'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
+                      date:
+                          'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
                       shortDesc: ticket['ShortDesc'] ?? '',
                     ),
                   );
@@ -362,30 +479,57 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         children: [
           Row(
             children: [
-              Expanded(child: _buildDropdown('Ticket Type', ['Yours', 'Department'], ticketType, (val) => setState(() => ticketType = val!))),
+              Expanded(
+                child: _buildDropdown(
+                  'Ticket Type',
+                  ['Yours', 'Department'],
+                  ticketType,
+                  (val) => setState(() => ticketType = val!),
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _buildDropdown('Status', ['All', 'Open', 'Closed', 'Deliverable'], status, (val) => setState(() => status = val!))),
+              Expanded(
+                child: _buildDropdown(
+                  'Status',
+                  ['All', 'Open', 'Closed', 'Deliverable'],
+                  status,
+                  (val) => setState(() => status = val!),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
+          _buildDepartmentDropdown(),
+          const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _buildDropdown('Search By', ['None', 'Ticket #', 'Description'], searchBy, (val) => setState(() => searchBy = val!))),
+              Expanded(
+                child: _buildDropdown(
+                  'Search By',
+                  ['None', 'Ticket #', 'Description'],
+                  searchBy,
+                  (val) => setState(() => searchBy = val!),
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text('Search', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const Text(
+                      'Search',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                     const SizedBox(height: 4),
                     TextField(
-                        controller: searchController,
-                        focusNode: searchFocusNode,
-                        decoration: const InputDecoration(
-                          hintText: 'Search...',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                        ))
+                      controller: searchController,
+                      focusNode: searchFocusNode,
+                      decoration: const InputDecoration(
+                        hintText: 'Search...',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -398,17 +542,25 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('From Date', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const Text(
+                      'From Date',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () => _pickDate(context, true),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 12,
+                        ),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(fromDate != null ? _formatDate(fromDate!) : 'Select'),
+                        child: Text(
+                          fromDate != null ? _formatDate(fromDate!) : 'Select',
+                        ),
                       ),
                     ),
                   ],
@@ -419,17 +571,25 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('To Date', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const Text(
+                      'To Date',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                     const SizedBox(height: 4),
                     GestureDetector(
                       onTap: () => _pickDate(context, false),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 12,
+                        ),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.grey),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(toDate != null ? _formatDate(toDate!) : 'Select'),
+                        child: Text(
+                          toDate != null ? _formatDate(toDate!) : 'Select',
+                        ),
                       ),
                     ),
                   ],
@@ -457,7 +617,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Ticket Group', style: TextStyle(fontWeight: FontWeight.w500)),
+                        const Text(
+                          'Ticket Group',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
                         const SizedBox(height: 4),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -466,8 +629,11 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: DropdownButton<String>(
-                            value: (selectedTicketGroup != null &&
-                                ticketGroups.any((g) => g['Code'] == selectedTicketGroup))
+                            value:
+                                (selectedTicketGroup != null &&
+                                    ticketGroups.any(
+                                      (g) => g['Code'] == selectedTicketGroup,
+                                    ))
                                 ? selectedTicketGroup
                                 : null,
                             isExpanded: true,
@@ -476,7 +642,8 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                             disabledHint: const Text("Loading..."),
                             items: ticketGroups.map((group) {
                               final code = group['Code']?.toString() ?? '';
-                              final desc = group['Description']?.toString() ?? code;
+                              final desc =
+                                  group['Description']?.toString() ?? code;
                               return DropdownMenuItem(
                                 value: code,
                                 child: Text(desc),
@@ -484,7 +651,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                             }).toList(),
                             onChanged: isTicketGroupLoading
                                 ? null
-                                : (value) => setLocalState(() => selectedTicketGroup = value),
+                                : (value) => setLocalState(
+                                    () => selectedTicketGroup = value,
+                                  ),
                           ),
                         ),
                       ],
@@ -500,7 +669,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                           Checkbox(
                             value: useActiveGroupsOnly,
                             onChanged: (value) async {
-                              setLocalState(() => useActiveGroupsOnly = value ?? true);
+                              setLocalState(
+                                () => useActiveGroupsOnly = value ?? true,
+                              );
                               await _fetchTicketGroups();
                             },
                           ),
@@ -524,7 +695,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                   'Sort By',
                   ['Last Activity', 'Start Date'],
                   sortBy,
-                      (val) => setState(() => sortBy = val!),
+                  (val) => setState(() => sortBy = val!),
                 ),
               ),
               const SizedBox(width: 12),
@@ -532,7 +703,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
               // Right: Buttons with vertical alignment fix
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.only(top: 30.0), // 👈 Adjust this value as needed
+                  padding: const EdgeInsets.only(
+                    top: 30.0,
+                  ), // 👈 Adjust this value as needed
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: Wrap(
@@ -546,7 +719,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                               backgroundColor: Colors.lightBlueAccent,
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                             child: const Text('Search'),
                           ),
@@ -556,10 +731,13 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                           child: ElevatedButton(
                             onPressed: _exportToExcel,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.lightBlueAccent, //greenAccent,
+                              backgroundColor:
+                                  Colors.lightBlueAccent, //greenAccent,
                               foregroundColor: Colors.black,
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
                             child: const Text('Export'),
                           ),
@@ -570,13 +748,50 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDropdown(String label, List<String> options, String selected, ValueChanged<String?> onChanged) {
+  Widget _buildDepartmentDropdown() {
+    final selectedIsValid = departments.any(
+      (department) => department['Code'] == selectedDepartmentCode,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Department', style: TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<String>(
+          value: selectedIsValid ? selectedDepartmentCode : null,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          ),
+          hint: Text(isDepartmentLoading ? 'Loading...' : 'Select Department'),
+          items: departments.map((department) {
+            final code = department['Code'] ?? '';
+            final description = department['Description'] ?? '';
+            final label = code.isEmpty ? description : '$code - $description';
+            return DropdownMenuItem(value: code, child: Text(label));
+          }).toList(),
+          onChanged: isDepartmentLoading || !Constants.isEmployee
+              ? null
+              : (value) => setState(() => selectedDepartmentCode = value),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdown(
+    String label,
+    List<String> options,
+    String selected,
+    ValueChanged<String?> onChanged,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -592,7 +807,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
             value: selected,
             isExpanded: true,
             underline: const SizedBox(),
-            items: options.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            items: options
+                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .toList(),
             onChanged: onChanged,
           ),
         ),
@@ -614,7 +831,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(ticketKey, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              ticketKey,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 4),
             Text(date, style: const TextStyle(color: Colors.grey)),
             const SizedBox(height: 8),

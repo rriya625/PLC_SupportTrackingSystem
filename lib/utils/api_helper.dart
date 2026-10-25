@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:flutter/foundation.dart';
 
-
 /// APIHelper
 ///
 /// Centralizes all HTTP-based service calls for the application, including:
@@ -19,7 +18,6 @@ import 'package:flutter/foundation.dart';
 /// This class provides static methods for interacting with backend APIs and
 /// manages authentication tokens and user session information.
 class APIHelper {
-
   /// 1. Authentication & Token Handling
 
   /// Ensures the access token is valid.
@@ -29,7 +27,8 @@ class APIHelper {
   static Future<bool> ensureValidToken() async {
     final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-    if (Constants.accessToken != null && Constants.tokenExpiration > currentTime) {
+    if (Constants.accessToken != null &&
+        Constants.tokenExpiration > currentTime) {
       return true;
     }
 
@@ -40,7 +39,8 @@ class APIHelper {
     if (userId != 0 && password.isNotEmpty) {
       final result = await loginUser(userId.toString(), password);
       return Constants.accessToken != null &&
-          Constants.tokenExpiration > DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          Constants.tokenExpiration >
+              DateTime.now().millisecondsSinceEpoch ~/ 1000;
     }
 
     return false;
@@ -54,7 +54,6 @@ class APIHelper {
   ///
   /// Returns error message string if failed, or fetchUserInfo() result on success.
   static Future<dynamic> loginUser(String userId, String password) async {
-
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
 
@@ -79,8 +78,10 @@ class APIHelper {
         jsonBody is Map &&
         jsonBody.containsKey('AccessToken')) {
       Constants.accessToken = jsonBody['AccessToken'];
-      final adjustedExpiration = ((DateTime.now().millisecondsSinceEpoch ~/ 1000) +
-          (jsonBody['AccessExpiresIn'] * 0.95)).toInt();
+      final adjustedExpiration =
+          ((DateTime.now().millisecondsSinceEpoch ~/ 1000) +
+                  (jsonBody['AccessExpiresIn'] * 0.95))
+              .toInt();
       Constants.tokenExpiration = adjustedExpiration;
       Constants.userID = int.parse(userId);
       Constants.userPassword = password;
@@ -95,7 +96,9 @@ class APIHelper {
     // Try to extract the message from the rawBody if possible, otherwise extract nested error message or return fallback.
     try {
       final parsed = jsonDecode(rawBody);
-      if (parsed is Map && parsed.containsKey('error') && parsed['error'] is Map) {
+      if (parsed is Map &&
+          parsed.containsKey('error') &&
+          parsed['error'] is Map) {
         final error = parsed['error'];
         if (error.containsKey('message')) {
           return error['message'].toString();
@@ -111,16 +114,25 @@ class APIHelper {
   static Future<String?> fetchUserInfo() async {
     await ensureValidToken();
     final userInfoUri = Uri.parse(
-        '${Constants.baseUrlData}GetUserInfo?UserID=${Constants.userID}');
-    final response = await http.get(userInfoUri, headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ${Constants.accessToken}',
-    });
+      '${Constants.baseUrlData}GetUserInfo?UserID=${Constants.userID}',
+    );
+    final response = await http.get(
+      userInfoUri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${Constants.accessToken}',
+      },
+    );
 
     if (response.statusCode == 200) {
       final userData = jsonDecode(response.body);
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
+      Constants.userType =
+          (userData['USER_TYPE'] ?? userData['User Type'])?.toString() ?? '';
+      Constants.accessLevel =
+          (userData['ACCESS_LEVEL'] ?? userData['Access Level'])?.toString() ??
+          '';
       Constants.emailAddress = userData['EMail']?.toString() ?? '';
       Constants.qbLinkKey = userData['QB Link Key']?.toString() ?? '';
       return null; // Success
@@ -189,12 +201,12 @@ class APIHelper {
     required String fromDate,
     required String toDate,
     required String ticketGroupCode,
+    required String? departmentCode,
   }) async {
     await ensureValidToken();
 
     final searchType = ticketType == 'Yours' ? 'USER' : 'DEPT';
     final userId = searchType == 'USER' ? Constants.userID.toString() : '-1';
-    final deptId = Constants.qbLinkKey;
 
     String statusCode = '';
     switch (status) {
@@ -231,25 +243,33 @@ class APIHelper {
       throw Exception('Invalid From/To Date: $e');
     }
 
+    final queryParameters = <String, String>{
+      'SearchType': searchType,
+      'UserID': userId,
+      'Status': statusCode,
+      'SortBy': sortByMapped,
+      'SearchBy': searchByMapped.trim(),
+      'SearchValue': searchValue.trim(),
+      'DateFrom': fromDate,
+      'DateTo': toDate,
+      'TicketGroup': ticketGroupCode,
+    };
+    if (departmentCode != null && departmentCode.trim().isNotEmpty) {
+      queryParameters['DeptID'] = departmentCode.trim();
+    }
+
     final uri = Uri.parse(
-      '${Constants.baseUrlData}GetTickets'
-          '?SearchType=${Uri.encodeComponent(searchType)}'
-          '&UserID=${Uri.encodeComponent(userId)}'
-          '&DeptID=${Uri.encodeComponent(deptId)}'
-          '&Status=${Uri.encodeComponent(statusCode)}'
-          '&SortBy=${Uri.encodeComponent(sortByMapped)}'
-          '&SearchBy=${Uri.encodeComponent(searchByMapped.trim())}'
-          '&SearchValue=${Uri.encodeComponent(searchValue.trim())}'
-          '&DateFrom=${Uri.encodeComponent(fromDate)}'
-          '&DateTo=${Uri.encodeComponent(toDate)}'
-          '&TicketGroup=${Uri.encodeComponent(ticketGroupCode)}',
-    );
+      '${Constants.baseUrlData}GetTickets',
+    ).replace(queryParameters: queryParameters);
 
     try {
-      final response = await http.get(uri, headers: {
-        'Authorization': 'Bearer ${Constants.accessToken}',
-        'Accept': 'application/json',
-      });
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer ${Constants.accessToken}',
+          'Accept': 'application/json',
+        },
+      );
 
       final jsonResponse = jsonDecode(response.body);
 
@@ -271,24 +291,28 @@ class APIHelper {
   /// - [ticketKey]: The unique key for the ticket.
   ///
   /// Returns ticket details as a map, or null if not found.
-  static Future<Map<String, dynamic>?> fetchTicketDetails(String ticketKey) async {
+  static Future<Map<String, dynamic>?> fetchTicketDetails(
+    String ticketKey,
+  ) async {
     await ensureValidToken();
-    final uri = Uri.parse('${Constants.baseUrlData}GetTicketDetails?TicketKey=$ticketKey');
-    print('Calling API for ticket details: $uri');
-    print('Using token: ${Constants.accessToken}');
+    final uri = Uri.parse(
+      '${Constants.baseUrlData}GetTicketDetails?TicketKey=$ticketKey',
+    );
+    debugPrint('Calling ticket details API.');
 
     try {
-      final response = await http.get(uri, headers: {
-        'Authorization': 'Bearer ${Constants.accessToken}',
-        'Accept': 'application/json',
-      });
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer ${Constants.accessToken}',
+          'Accept': 'application/json',
+        },
+      );
 
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      debugPrint('Ticket details response status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('Fetched ticket data: $data');
         return data;
       } else {
         print('Error fetching ticket details: ${response.reasonPhrase}');
@@ -381,10 +405,7 @@ class APIHelper {
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
 
-      fileData.add({
-        'sFileName': fileName,
-        'Base64Content': base64String,
-      });
+      fileData.add({'sFileName': fileName, 'Base64Content': base64String});
     }
 
     final requestBody = {
@@ -393,9 +414,7 @@ class APIHelper {
       'FileList': fileData,
     };
 
-    // Debug print before making the request
-    print('📤 Uploading to API: ${Uri.parse('${Constants.baseUrlData}UploadFiles')}');
-    print('📦 Request payload: ${jsonEncode(requestBody)}');
+    debugPrint('Uploading ${fileData.length} file(s).');
 
     final response = await http.post(
       Uri.parse('${Constants.baseUrlData}UploadFiles'),
@@ -406,9 +425,7 @@ class APIHelper {
       body: jsonEncode(requestBody),
     );
 
-    // Debug print after receiving the response
-    print('✅ Upload response status: ${response.statusCode}');
-    print('📨 Upload response body: ${response.body}');
+    debugPrint('Upload response status: ${response.statusCode}');
 
     return response;
   }
@@ -435,10 +452,7 @@ class APIHelper {
     final List<Map<String, dynamic>> fileData = fileList.map((file) {
       final fileName = file['name'] ?? 'file.bin';
       final base64String = base64Encode(file['bytes'] as List<int>);
-      return {
-        'sFileName': fileName,
-        'Base64Content': base64String,
-      };
+      return {'sFileName': fileName, 'Base64Content': base64String};
     }).toList();
 
     final requestBody = {
@@ -459,14 +473,15 @@ class APIHelper {
     return response;
   }
 
-
   /// Downloads image files attached to a ticket.
   ///
   /// Parameters:
   /// - [ticketKey]: The ticket key whose images to download.
   ///
   /// Returns a list of maps with 'FileName' and decoded 'Base64Content'.
-  static Future<List<Map<String, dynamic>>> getDownloadedImages(String ticketKey) async {
+  static Future<List<Map<String, dynamic>>> getDownloadedImages(
+    String ticketKey,
+  ) async {
     await ensureValidToken();
     final response = await http.get(
       Uri.parse('${Constants.baseUrlData}DownloadFiles?TicketKey=$ticketKey'),
@@ -476,16 +491,14 @@ class APIHelper {
       },
     );
 
-    // Debug print the full API response body
-    print('📥 DownloadFiles API response: ${response.body}');
+    debugPrint('Download response status: ${response.statusCode}');
 
     if (response.statusCode == 200) {
       final jsonData = json.decode(response.body);
       // Try common response shapes: FileList, value, Data
-      final List files = (jsonData['FileList'] ??
-                          jsonData['value'] ??
-                          jsonData['Data'] ??
-                          []) as List;
+      final List files =
+          (jsonData['FileList'] ?? jsonData['value'] ?? jsonData['Data'] ?? [])
+              as List;
 
       return files.map<Map<String, dynamic>>((file) {
         final base64Str = file['Base64Content'] ?? '';
@@ -494,7 +507,9 @@ class APIHelper {
           final cleaned = base64Str.replaceAll(RegExp(r'\s+'), '');
           decoded = base64Decode(cleaned);
         } catch (e) {
-          print("❌ Error decoding base64 image: $e"); // If decoding fails, return null for content
+          print(
+            "❌ Error decoding base64 image: $e",
+          ); // If decoding fails, return null for content
           decoded = null;
         }
         return {
@@ -513,9 +528,13 @@ class APIHelper {
   /// - [ticketKey]: The ticket key.
   ///
   /// Returns a list of maps with 'sFileName' and 'Base64Content' (as string).
-  static Future<List<Map<String, String>>> getImagesForTicket(String ticketKey) async {
+  static Future<List<Map<String, String>>> getImagesForTicket(
+    String ticketKey,
+  ) async {
     await ensureValidToken();
-    final url = Uri.parse('${Constants.baseUrlData}/DownloadFiles?TicketKey=$ticketKey&ProspectKey=${Constants.userID}');
+    final url = Uri.parse(
+      '${Constants.baseUrlData}/DownloadFiles?TicketKey=$ticketKey&ProspectKey=${Constants.userID}',
+    );
 
     final response = await http.get(
       url,
@@ -549,14 +568,14 @@ class APIHelper {
   /// Returns a list of maps with 'date' and 'fileName' keys.
   ///
   /// Calls: GET {Constants.baseUrlData}GetCustomerDocsList?TicketKey={ticketKey}
-  static Future<List<Map<String, String>>> getCustomerDocsList(String ticketKey) async {
+  static Future<List<Map<String, String>>> getCustomerDocsList(
+    String ticketKey,
+  ) async {
     await ensureValidToken();
 
     final uri = Uri.parse(
       '${Constants.baseUrlData}GetCustomerDocsList',
-    ).replace(queryParameters: {
-      'TicketKey': ticketKey,
-    });
+    ).replace(queryParameters: {'TicketKey': ticketKey});
 
     final headers = <String, String>{
       'Accept': 'application/json',
@@ -585,23 +604,16 @@ class APIHelper {
       return data.map<Map<String, String>>((e) {
         if (e is Map) {
           final date = (e['DateUploaded'] ?? e['Date'] ?? '').toString();
-          final name = (e['DocumentName'] ?? e['sFileName'] ?? e['FileName'] ?? '').toString();
-          return {
-            'date': date,
-            'fileName': name,
-          };
+          final name =
+              (e['DocumentName'] ?? e['sFileName'] ?? e['FileName'] ?? '')
+                  .toString();
+          return {'date': date, 'fileName': name};
         }
         // If an element is a string, treat it as a filename with no date
         if (e is String) {
-          return {
-            'date': '',
-            'fileName': e,
-          };
+          return {'date': '', 'fileName': e};
         }
-        return {
-          'date': '',
-          'fileName': e.toString(),
-        };
+        return {'date': '', 'fileName': e.toString()};
       }).toList();
     }
 
@@ -611,7 +623,13 @@ class APIHelper {
         if (e is Map) {
           return {
             'date': (e['DateUploaded'] ?? e['Date'] ?? '').toString(),
-            'fileName': (e['DocumentName'] ?? e['sFileName'] ?? e['FileName'] ?? e['name'] ?? '').toString(),
+            'fileName':
+                (e['DocumentName'] ??
+                        e['sFileName'] ??
+                        e['FileName'] ??
+                        e['name'] ??
+                        '')
+                    .toString(),
           };
         }
         if (e is String) return {'date': '', 'fileName': e};
@@ -619,10 +637,14 @@ class APIHelper {
       }).toList();
     }
     if (decoded is String) {
-      return [ {'date': '', 'fileName': decoded} ];
+      return [
+        {'date': '', 'fileName': decoded},
+      ];
     }
 
-    return [ {'date': '', 'fileName': raw} ];
+    return [
+      {'date': '', 'fileName': raw},
+    ];
   }
 
   /// 4. Activity & Logging
@@ -633,9 +655,13 @@ class APIHelper {
   /// - [ticketNumber]: The ticket number or key.
   ///
   /// Returns a list of activity message maps.
-  static Future<List<Map<String, dynamic>>> getActivityMessages(String ticketNumber) async {
+  static Future<List<Map<String, dynamic>>> getActivityMessages(
+    String ticketNumber,
+  ) async {
     await ensureValidToken();
-    final url = Uri.parse('${Constants.baseUrlData}GetWebActivities?TicketKey=$ticketNumber');
+    final url = Uri.parse(
+      '${Constants.baseUrlData}GetWebActivities?TicketKey=$ticketNumber',
+    );
     final headers = {
       'accept': 'application/json',
       'Authorization': 'Bearer ${Constants.accessToken}',
@@ -671,7 +697,9 @@ class APIHelper {
     if (!Platform.isWindows) return; // Only for Windows build
 
     try {
-      final qb = (Constants.qbLinkKey.isNotEmpty ? Constants.qbLinkKey : 'UNKNOWN');
+      final qb = (Constants.qbLinkKey.isNotEmpty
+          ? Constants.qbLinkKey
+          : 'UNKNOWN');
       final safeQb = qb.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
 
       final now = DateTime.now();
@@ -688,7 +716,9 @@ class APIHelper {
 
       final iso = now.toIso8601String();
       final line = '[$iso] $buttonName clicked (QBLinkKey=$qb)\r\n';
-      await File(filePath).writeAsString(line, mode: FileMode.append, flush: true);
+      await File(
+        filePath,
+      ).writeAsString(line, mode: FileMode.append, flush: true);
     } catch (_) {
       // Swallow errors: logging must never break UI
     }
@@ -704,12 +734,17 @@ class APIHelper {
   /// Returns a list of maps with 'Code' and 'Description' keys.
   static Future<List<Map<String, String>>> getCodeList(String codeTable) async {
     await ensureValidToken();
-    final url = Uri.parse('${Constants.baseUrlData}GetCodeList?CodeTable=$codeTable');
+    final url = Uri.parse(
+      '${Constants.baseUrlData}GetCodeList?CodeTable=$codeTable',
+    );
 
-    final response = await http.get(url, headers: {
-      'Authorization': 'Bearer ${Constants.accessToken}',
-      'Accept': 'application/json',
-    });
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer ${Constants.accessToken}',
+        'Accept': 'application/json',
+      },
+    );
 
     if (response.statusCode == 200) {
       final List<dynamic> jsonList = jsonDecode(response.body);
@@ -734,15 +769,18 @@ class APIHelper {
     final useActive = useActiveOnly ? 'Y' : 'N';
     final url = Uri.parse(
       '${Constants.baseUrlData}GetTicketGroup'
-          '?ProspectKey=$prospectKey'
-          '&QBLinkKey=$qbLinkKey'
-          '&UseActiveOnly=$useActive',
+      '?ProspectKey=$prospectKey'
+      '&QBLinkKey=$qbLinkKey'
+      '&UseActiveOnly=$useActive',
     );
 
-    final response = await http.get(url, headers: {
-      'Authorization': 'Bearer ${Constants.accessToken}',
-      'Accept': 'application/json',
-    });
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer ${Constants.accessToken}',
+        'Accept': 'application/json',
+      },
+    );
 
     if (response.statusCode == 200) {
       final List<dynamic> jsonList = jsonDecode(response.body);
@@ -766,12 +804,12 @@ class APIHelper {
     required String fromDate,
     required String toDate,
     required String ticketGroupCode,
+    required String? departmentCode,
   }) async {
     await ensureValidToken();
 
     final searchType = ticketType == 'Yours' ? 'USER' : 'DEPT';
     final userId = searchType == 'USER' ? Constants.userID.toString() : '-1';
-    final deptId = Constants.qbLinkKey;
 
     String statusCode = '';
     switch (status) {
@@ -797,32 +835,40 @@ class APIHelper {
 
     final sortByMapped = sortBy;
 
-    final uri = Uri.parse(
-      '${Constants.baseUrlData}ExportTicketsCSV'
-          '?SearchType=${Uri.encodeComponent(searchType)}'
-          '&UserID=${Uri.encodeComponent(userId)}'
-          '&DeptID=${Uri.encodeComponent(deptId)}'
-          '&Status=${Uri.encodeComponent(statusCode)}'
-          '&SortBy=${Uri.encodeComponent(sortByMapped)}'
-          '&SearchBy=${Uri.encodeComponent(searchByMapped.trim())}'
-          '&SearchValue=${Uri.encodeComponent(searchValue.trim())}'
-          '&DateFrom=${Uri.encodeComponent(fromDate)}'
-          '&DateTo=${Uri.encodeComponent(toDate)}'
-          '&TicketGroup=${Uri.encodeComponent(ticketGroupCode)}',
-    );
+    final queryParameters = <String, String>{
+      'SearchType': searchType,
+      'UserID': userId,
+      'Status': statusCode,
+      'SortBy': sortByMapped,
+      'SearchBy': searchByMapped.trim(),
+      'SearchValue': searchValue.trim(),
+      'DateFrom': fromDate,
+      'DateTo': toDate,
+      'TicketGroup': ticketGroupCode,
+    };
+    if (departmentCode != null && departmentCode.trim().isNotEmpty) {
+      queryParameters['DeptID'] = departmentCode.trim();
+    }
 
-    return await http.get(uri, headers: {
-      'Authorization': 'Bearer ${Constants.accessToken}',
-      'Accept': 'application/json',
-    });
+    final uri = Uri.parse(
+      '${Constants.baseUrlData}ExportTicketsCSV',
+    ).replace(queryParameters: queryParameters);
+
+    return await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer ${Constants.accessToken}',
+        'Accept': 'application/json',
+      },
+    );
   }
 
   static Future<Map<String, dynamic>> updateTicket(
-      int ticketKey,
-      String customerReference,
-      String sharepointLink,
-      String sendConfirmationTo, // 🔹 positional
-      ) async {
+    int ticketKey,
+    String customerReference,
+    String sharepointLink,
+    String sendConfirmationTo, // 🔹 positional
+  ) async {
     final url = Uri.parse('${Constants.baseUrlData}UpdateTicket');
 
     final headers = {
@@ -845,7 +891,9 @@ class APIHelper {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to update ticket: ${response.statusCode} → ${response.body}');
+      throw Exception(
+        'Failed to update ticket: ${response.statusCode} → ${response.body}',
+      );
     }
   }
 }

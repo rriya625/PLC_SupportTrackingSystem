@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 BuildContext? _dialogContext;
+bool _spinnerRequested = false;
+bool _hideWhenShown = false;
 
 /// Shows a fullscreen blocking spinner with custom message (default: "Uploading...")
 void showUploadSpinner([String message = "loading..."]) {
-  if (_dialogContext != null) return;
+  if (_spinnerRequested || _dialogContext != null) return;
 
   final context = rootNavigatorKey.currentContext;
   if (context == null) {
     debugPrint("⚠️ Spinner not shown. No context.");
     return;
   }
+
+  _spinnerRequested = true;
+  _hideWhenShown = false;
 
   showGeneralDialog(
     context: context,
@@ -20,6 +25,11 @@ void showUploadSpinner([String message = "loading..."]) {
     transitionDuration: const Duration(milliseconds: 150),
     pageBuilder: (ctx, anim1, anim2) {
       _dialogContext = ctx;
+      if (_hideWhenShown) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          hideUploadSpinner();
+        });
+      }
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -50,5 +60,9 @@ void hideUploadSpinner() {
   if (_dialogContext != null) {
     Navigator.of(_dialogContext!).pop();
     _dialogContext = null;
+    _spinnerRequested = false;
+    _hideWhenShown = false;
+  } else if (_spinnerRequested) {
+    _hideWhenShown = true;
   }
 }

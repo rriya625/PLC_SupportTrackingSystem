@@ -42,10 +42,7 @@ Future<void> pickAndUploadFilesWeb({
         final Uint8List fileBytes = reader.result as Uint8List;
         final base64String = base64Encode(fileBytes);
 
-        fileData.add({
-          'sFileName': file.name,
-          'Base64Content': base64String,
-        });
+        fileData.add({'sFileName': file.name, 'Base64Content': base64String});
 
         print("📤 Prepared file: ${file.name}, size: ${file.size}");
       }
@@ -68,8 +65,7 @@ Future<void> pickAndUploadFilesWeb({
         body: jsonEncode(requestBody),
       );
 
-      print("✅ API Response: ${response.statusCode}");
-      print("📨 Response Body: ${response.body}");
+      debugPrint("Upload response status: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body);
@@ -84,7 +80,6 @@ Future<void> pickAndUploadFilesWeb({
           //hideUploadSpinner();
           await showMessageDialog(context, 'Upload failed: ${json['Message']}');
         }
-
       } else {
         print("❌ Upload failed: ${response.reasonPhrase}");
       }
@@ -120,6 +115,8 @@ void pickFilesForWeb({
   final input = html.FileUploadInputElement();
   input.accept = '*/*';
   input.multiple = true;
+  input.style.display = 'none';
+  html.document.body?.append(input);
 
   input.onChange.listen((event) async {
     final files = input.files;
@@ -133,7 +130,14 @@ void pickFilesForWeb({
         final completer = Completer<Uint8List>();
 
         reader.onLoad.listen((event) {
-          completer.complete(reader.result as Uint8List);
+          final result = reader.result;
+          if (result is Uint8List) {
+            completer.complete(result);
+          } else if (result is ByteBuffer) {
+            completer.complete(result.asUint8List());
+          } else {
+            completer.completeError('Unsupported browser file result');
+          }
         });
         reader.onError.listen((event) {
           completer.completeError('File read error');
@@ -146,24 +150,24 @@ void pickFilesForWeb({
         final fileBytes = await completer.future;
         final base64 = base64Encode(fileBytes);
 
-        pendingFiles.add({
-          'sFileName': file.name,
-          'Base64Content': base64,
-        });
+        pendingFiles.add({'sFileName': file.name, 'Base64Content': base64});
       }
     } catch (e) {
       print('Error reading file(s): $e');
     } finally {
       hideUploadSpinner();
       updateUI();
-      input.remove(); // optional cleanup
+      input.remove();
     }
   });
 
   input.click();
 }
 
-Future<void> uploadPickedFilesWeb(int ticketKey, List<Map<String, dynamic>> files) async {
+Future<void> uploadPickedFilesWeb(
+  int ticketKey,
+  List<Map<String, dynamic>> files,
+) async {
   showUploadSpinner('Uploading...'); // ✅ Show platform-safe spinner
 
   final uri = Uri.parse('${Constants.baseUrlData}UploadFiles');
@@ -186,8 +190,7 @@ Future<void> uploadPickedFilesWeb(int ticketKey, List<Map<String, dynamic>> file
       body: jsonEncode(requestBody),
     );
 
-    print("✅ API Response: ${response.statusCode}");
-    print("📨 Response Body: ${response.body}");
+    debugPrint("Upload response status: ${response.statusCode}");
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);

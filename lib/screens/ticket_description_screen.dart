@@ -21,10 +21,12 @@ class TicketDescriptionScreenStateful extends StatefulWidget {
   const TicketDescriptionScreenStateful({Key? key}) : super(key: key);
 
   @override
-  _TicketDescriptionScreenState createState() => _TicketDescriptionScreenState();
+  _TicketDescriptionScreenState createState() =>
+      _TicketDescriptionScreenState();
 }
 
-class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStateful> {
+class _TicketDescriptionScreenState
+    extends State<TicketDescriptionScreenStateful> {
   String ticketKey = '';
   String ticketNumber = '';
   String dateCreated = '';
@@ -35,41 +37,60 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
   String customerReference = '';
   String sharepointLink = '';
   String sendConfirmationTo = '';
+  Map<String, String> _statusDescriptions = {};
   final ImagePicker _picker = ImagePicker();
   final List<dynamic> _attachedImages = [];
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
+    Future.microtask(() async {
       final route = ModalRoute.of(context);
       final args = route?.settings.arguments;
       ticketKey = args?.toString() ?? '';
       print('Ticket key received: $ticketKey');
       if (ticketKey.isNotEmpty) {
-        APIHelper.fetchTicketDetails(ticketKey).then((data) {
-          if (data != null) {
-            setState(() {
-              ticketNumber = data['TicketKey'] ?? '';
-              dateCreated = data['StartDate'] ?? '';
-              assignedTo = data['EmployeeName'] ?? 'N/A';
-              currentStatus = (data['Status'] == 'O') ? 'Open' : data['Status'] ?? '';
-              shortDescription = data['ShortDesc'] ?? '';
-              longDescription = _parseRtf(data['LongDesc'] ?? '');
-              customerReference = data['CustomerReference'] ?? '';
-              sharepointLink = data['SharepointLink'] ?? '';
-              sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
-            });
-          } else {
-            setState(() {
-              assignedTo = 'Error loading data';
-            });
-          }
-        });
+        await _loadStatusDescriptions();
+        final data = await APIHelper.fetchTicketDetails(ticketKey);
+        if (data != null && mounted) {
+          setState(() {
+            ticketNumber = data['TicketKey'] ?? '';
+            dateCreated = data['StartDate'] ?? '';
+            assignedTo = data['EmployeeName'] ?? 'N/A';
+            currentStatus = _statusDisplay(data['Status']);
+            shortDescription = data['ShortDesc'] ?? '';
+            longDescription = _parseRtf(data['LongDesc'] ?? '');
+            customerReference = data['CustomerReference'] ?? '';
+            sharepointLink = data['SharepointLink'] ?? '';
+            sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
+          });
+        } else if (mounted) {
+          setState(() {
+            assignedTo = 'Error loading data';
+          });
+        }
       } else {
         print('No ticket key found in route arguments.');
       }
     });
+  }
+
+  Future<void> _loadStatusDescriptions() async {
+    try {
+      final codes = await APIHelper.getCodeList('STATCODE');
+      _statusDescriptions = {
+        for (final item in codes)
+          if (item['Code'] != null)
+            item['Code']!: item['Description'] ?? item['Code']!,
+      };
+    } catch (error) {
+      debugPrint('Unable to load STATCODE descriptions: $error');
+    }
+  }
+
+  String _statusDisplay(dynamic status) {
+    final code = status?.toString() ?? '';
+    return _statusDescriptions[code] ?? code;
   }
 
   String _parseRtf(String rtfText) {
@@ -83,7 +104,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(actions: [],
+      appBar: AppBar(
+        actions: [],
         title: const Text('Ticket Description'),
         centerTitle: true,
         backgroundColor: Colors.blue[800],
@@ -104,13 +126,24 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(width: 180, child: Text('Description:', style: const TextStyle(fontSize: 16))),
+                SizedBox(
+                  width: 180,
+                  child: Text(
+                    'Description:',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
                 //const Text('Description:', style: TextStyle(fontSize: 16)),
                 const SizedBox(width: 2),
-                Expanded(child: Text(shortDescription, style: const TextStyle(fontSize: 16))),
+                Expanded(
+                  child: Text(
+                    shortDescription,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 4),  //12
+            const SizedBox(height: 4), //12
 
             _buildField('Customer Ref:', customerReference),
 
@@ -124,17 +157,27 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                 children: [
                   const SizedBox(
                     width: 180,
-                    child: Text('Sharepoint Link:', style: TextStyle(fontSize: 16)),
+                    child: Text(
+                      'Sharepoint Link:',
+                      style: TextStyle(fontSize: 16),
+                    ),
                   ),
                   Expanded(
                     child: GestureDetector(
                       onTap: () async {
-                        final url = sharepointLink.startsWith('http') ? sharepointLink : 'https://${sharepointLink}';
+                        final url = sharepointLink.startsWith('http')
+                            ? sharepointLink
+                            : 'https://${sharepointLink}';
                         if (await canLaunchUrl(Uri.parse(url))) {
-                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            Uri.parse(url),
+                            mode: LaunchMode.externalApplication,
+                          );
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Could not launch SharePoint link')),
+                            const SnackBar(
+                              content: Text('Could not launch SharePoint link'),
+                            ),
                           );
                         }
                       },
@@ -234,7 +277,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -243,10 +288,16 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                       child: ElevatedButton(
                         onPressed: () async {
                           try {
-                            final key = (ticketNumber.isNotEmpty ? ticketNumber : ticketKey).trim();
+                            final key =
+                                (ticketNumber.isNotEmpty
+                                        ? ticketNumber
+                                        : ticketKey)
+                                    .trim();
                             if (key.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Ticket key is missing')),
+                                const SnackBar(
+                                  content: Text('Ticket key is missing'),
+                                ),
                               );
                               return;
                             }
@@ -255,11 +306,13 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             showUploadSpinner('Loading Customer Documents...');
 
                             // Await API call to get file list
-                            final files = await APIHelper.getCustomerDocsList(key);
+                            final files = await APIHelper.getCustomerDocsList(
+                              key,
+                            );
 
                             // Dismiss loading dialog after API response
                             if (mounted) {
-                               hideUploadSpinner();
+                              hideUploadSpinner();
                             }
 
                             if (!mounted) return;
@@ -271,14 +324,35 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                                   backgroundColor: Colors.white,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(color: Colors.black, width: 1),
+                                    side: const BorderSide(
+                                      color: Colors.black,
+                                      width: 1,
+                                    ),
                                   ),
-                                  titlePadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                                  contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                                  actionsPadding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                                  titlePadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    16,
+                                    16,
+                                    0,
+                                  ),
+                                  contentPadding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    8,
+                                    16,
+                                    0,
+                                  ),
+                                  actionsPadding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    8,
+                                    12,
+                                    12,
+                                  ),
                                   title: Row(
                                     children: [
-                                      Icon(Icons.insert_drive_file, color: Colors.blue[800]),
+                                      Icon(
+                                        Icons.insert_drive_file,
+                                        color: Colors.blue[800],
+                                      ),
                                       const SizedBox(width: 8),
                                       Text(
                                         'Documents',
@@ -293,28 +367,43 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                                   content: SizedBox(
                                     width: double.maxFinite,
                                     child: files.isEmpty
-                                        ? const Text('No files found.', style: TextStyle(fontSize: 14))
+                                        ? const Text(
+                                            'No files found.',
+                                            style: TextStyle(fontSize: 14),
+                                          )
                                         : ListView.builder(
                                             shrinkWrap: true,
                                             itemCount: files.length,
                                             itemBuilder: (context, index) {
                                               final file = files[index];
                                               return Padding(
-                                                padding: const EdgeInsets.only(bottom: 12.0),
+                                                padding: const EdgeInsets.only(
+                                                  bottom: 12.0,
+                                                ),
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       'File ${index + 1}: ${file['date'] ?? ''}',
-                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                      style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 14,
+                                                      ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       file['fileName'] ?? '',
-                                                      style: const TextStyle(fontSize: 14),
+                                                      style: const TextStyle(
+                                                        fontSize: 14,
+                                                      ),
                                                     ),
                                                     const SizedBox(height: 8),
-                                                    const Divider(height: 1, color: Colors.black12),
+                                                    const Divider(
+                                                      height: 1,
+                                                      color: Colors.black12,
+                                                    ),
                                                   ],
                                                 ),
                                               );
@@ -326,25 +415,47 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.black,
                                         backgroundColor: Colors.lightBlueAccent,
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 10,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
                                       ),
-                                      onPressed: () => Navigator.of(context).pop(),
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
                                       child: const Text('Close'),
                                     ),
                                     TextButton(
                                       style: TextButton.styleFrom(
                                         foregroundColor: Colors.black,
                                         backgroundColor: Colors.lightBlueAccent,
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 10,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
                                       ),
                                       onPressed: () async {
-                                        Navigator.of(context).pop(); // Close the current dialog first
+                                        Navigator.of(
+                                          context,
+                                        ).pop(); // Close the current dialog first
                                         final parentContext = this.context;
-                                        await _showImagePreviewDialogOnly(parentContext, ticketKey); // Show the image preview popup
+                                        await _showImagePreviewDialogOnly(
+                                          parentContext,
+                                          ticketKey,
+                                        ); // Show the image preview popup
                                       },
-                                      child: const Text('View/Download Documents'),
+                                      child: const Text(
+                                        'View/Download Documents',
+                                      ),
                                     ),
                                   ],
                                 );
@@ -356,7 +467,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             }
                             if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error loading file names: $e')),
+                              SnackBar(
+                                content: Text('Error loading file names: $e'),
+                              ),
                             );
                           }
                         },
@@ -364,7 +477,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                         child: const Text('View Documents'),
                       ),
@@ -391,7 +506,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -402,7 +519,8 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const MessageHistoryScreen(),
+                              builder: (context) =>
+                                  const MessageHistoryScreen(),
                               settings: RouteSettings(arguments: ticketNumber),
                             ),
                           );
@@ -413,7 +531,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -439,7 +559,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -450,7 +572,10 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ViewActivityScreen(ticketNumber: ticketNumber, shortDescription: shortDescription),
+                              builder: (context) => ViewActivityScreen(
+                                ticketNumber: ticketNumber,
+                                shortDescription: shortDescription,
+                              ),
                               settings: RouteSettings(arguments: ticketNumber),
                             ),
                           );
@@ -461,7 +586,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -480,11 +607,14 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
 
   Widget _buildField(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),  //12
+      padding: const EdgeInsets.only(bottom: 4), //12
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 180, child: Text(label, style: const TextStyle(fontSize: 16))),
+          SizedBox(
+            width: 180,
+            child: Text(label, style: const TextStyle(fontSize: 16)),
+          ),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 16))),
         ],
       ),
@@ -580,7 +710,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
             : List.generate(_attachedImages.length, (index) {
                 final item = _attachedImages[index];
                 if (item is File) {
-                  final isVideo = item.path.toLowerCase().endsWith('.mp4') || item.path.toLowerCase().endsWith('.mov');
+                  final isVideo =
+                      item.path.toLowerCase().endsWith('.mp4') ||
+                      item.path.toLowerCase().endsWith('.mov');
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12.0),
                     child: isVideo
@@ -592,9 +724,18 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                               Container(
                                 height: 200,
                                 color: Colors.black12,
-                                child: Center(child: Icon(Icons.videocam, size: 50, color: Colors.grey)),
+                                child: Center(
+                                  child: Icon(
+                                    Icons.videocam,
+                                    size: 50,
+                                    color: Colors.grey,
+                                  ),
+                                ),
                               ),
-                              Text(item.path.split('/').last, style: const TextStyle(fontSize: 12)),
+                              Text(
+                                item.path.split('/').last,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                             ],
                           )
                         : Image.file(item, height: 200),
@@ -610,16 +751,19 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               });
         return AlertDialog(
           title: const Text('Media Preview'),
-          content: SingleChildScrollView(
-            child: Column(children: mediaWidgets),
-          ),
+          content: SingleChildScrollView(child: Column(children: mediaWidgets)),
           actions: [
             TextButton(
               style: TextButton.styleFrom(
                 foregroundColor: Colors.black,
                 backgroundColor: Colors.lightBlueAccent,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () {
                 Navigator.of(context).pop();
@@ -671,8 +815,13 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               style: TextButton.styleFrom(
                 foregroundColor: Colors.black,
                 backgroundColor: Colors.lightBlueAccent,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () async {
                 Navigator.of(context).pop(); // Close preview dialog
@@ -710,23 +859,36 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                             builder: (context) => Center(
                               child: Material(
                                 color: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                                 child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 32,
+                                  ),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.check_circle, color: Colors.green, size: 60),
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                        size: 60,
+                                      ),
                                       const SizedBox(height: 16),
                                       const Text(
                                         'Upload Successful!',
-                                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                       const SizedBox(height: 20),
                                       TextButton(
-                                        onPressed: () => Navigator.of(context).pop(),
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
                                         child: const Text('OK'),
-                                      )
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -738,7 +900,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Upload failed: ${response.statusCode}')),
+                      SnackBar(
+                        content: Text('Upload failed: ${response.statusCode}'),
+                      ),
                     );
                   }
                 } catch (e) {
@@ -747,9 +911,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                   //html.document.getElementById('custom-upload-loading')?.remove(); // ✅ Always remove spinner
                   if (!context.mounted) return;
 
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Upload failed: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
                 }
               },
               child: const Text('Upload'),
@@ -802,22 +966,27 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
     }
   }
 
   // Shows a simple image preview dialog with just a close button, fetching images from API.
-  Future<void> _showImagePreviewDialogOnly(BuildContext context, String ticketKey) async {
+  Future<void> _showImagePreviewDialogOnly(
+    BuildContext context,
+    String ticketKey,
+  ) async {
     final keyToUse = ticketKey;
     if (keyToUse.isEmpty) return;
 
     showUploadSpinner('Downloading...');
 
     try {
-      final imageDataList = await APIHelper.getDownloadedImages(keyToUse).timeout(const Duration(seconds: 60));
+      final imageDataList = await APIHelper.getDownloadedImages(
+        keyToUse,
+      ).timeout(const Duration(seconds: 60));
       print("✅ Fetched images: ${imageDataList.length}");
 
       // Remove spinner before showing dialog
@@ -830,7 +999,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
         builder: (BuildContext context) {
           return AlertDialog(
             backgroundColor: Theme.of(context).dialogBackgroundColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             title: Container(
               color: Colors.blue,
               padding: EdgeInsets.zero,
@@ -841,10 +1012,17 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 4.0),
+                    padding: EdgeInsets.symmetric(
+                      vertical: 12.0,
+                      horizontal: 4.0,
+                    ),
                     child: Text(
                       'Downloaded Images',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
                   ),
                 ],
@@ -856,53 +1034,69 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: imageDataList.isEmpty
-                      ? [Text('No valid images to display.', style: Theme.of(context).textTheme.bodyMedium)]
-                      : imageDataList.map<Widget>((imageData) {
-                    final fileName = imageData['FileName'] ?? 'Unnamed';
-                    final imageBytes = imageData['Base64Content'];
-                    if (imageBytes is! Uint8List || imageBytes.isEmpty) return const SizedBox.shrink();
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(fileName, style: Theme.of(context).textTheme.bodyLarge),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              imageBytes,
-                              height: 200,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Image.asset(
-                                  'assets/preview_not_supported.png',
-                                  height: 200,
-                                  fit: BoxFit.cover,
-                                );
-                              },
-                            ),
+                      ? [
+                          Text(
+                            'No valid images to display.',
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: ElevatedButton.icon(
-                              //onPressed: () => _downloadImage(fileName, imageBytes),
-                              onPressed: () => downloadImage(context, fileName, imageBytes),
-                              icon: const Icon(Icons.download),
-                              label: const Text('Download'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
+                        ]
+                      : imageDataList.map<Widget>((imageData) {
+                          final fileName = imageData['FileName'] ?? 'Unnamed';
+                          final imageBytes = imageData['Base64Content'];
+                          if (imageBytes is! Uint8List || imageBytes.isEmpty)
+                            return const SizedBox.shrink();
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fileName,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    imageBytes,
+                                    height: 200,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Image.asset(
+                                        'assets/preview_not_supported.png',
+                                        height: 200,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ElevatedButton.icon(
+                                    //onPressed: () => _downloadImage(fileName, imageBytes),
+                                    onPressed: () => downloadImage(
+                                      context,
+                                      fileName,
+                                      imageBytes,
+                                    ),
+                                    icon: const Icon(Icons.download),
+                                    label: const Text('Download'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          )
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                          );
+                        }).toList(),
                 ),
               ),
             ),
@@ -920,9 +1114,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
       print("❌ Error while fetching images: $e");
       hideUploadSpinner();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load images: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load images: $e')));
       }
     } finally {
       // Ensure spinner is removed even on error
@@ -931,18 +1125,24 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
   }
 
   Future<void> _showUpdateTicketDialog(
-      BuildContext context,
-      int ticketKey,
-      String currentCustomerRef,
-      String currentSharepointLink,
-      String currentSendConfirmationTo, // 🔹 add parameter for existing value
-      ) async {
+    BuildContext context,
+    int ticketKey,
+    String currentCustomerRef,
+    String currentSharepointLink,
+    String currentSendConfirmationTo, // 🔹 add parameter for existing value
+  ) async {
     final parentContext = context; // ✅ Save parent context
 
     // Controllers
-    final customerRefController = TextEditingController(text: currentCustomerRef);
-    final sharepointLinkController = TextEditingController(text: currentSharepointLink);
-    final sendConfirmationController = TextEditingController(text: currentSendConfirmationTo);
+    final customerRefController = TextEditingController(
+      text: currentCustomerRef,
+    );
+    final sharepointLinkController = TextEditingController(
+      text: currentSharepointLink,
+    );
+    final sendConfirmationController = TextEditingController(
+      text: currentSendConfirmationTo,
+    );
 
     // Focus node
     final customerRefFocusNode = FocusNode();
@@ -962,7 +1162,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               controller: customerRefController,
               focusNode: customerRefFocusNode, // ✅ Attach focus node
               maxLength: 20,
-              decoration: const InputDecoration(labelText: 'Customer Reference'),
+              decoration: const InputDecoration(
+                labelText: 'Customer Reference',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -974,7 +1176,9 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
             TextField(
               controller: sendConfirmationController,
               maxLength: 50,
-              decoration: const InputDecoration(labelText: 'Send Confirmation To'),
+              decoration: const InputDecoration(
+                labelText: 'Send Confirmation To',
+              ),
             ),
           ],
         );
@@ -998,8 +1202,11 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
               ),
               onPressed: () async {
                 final updatedCustomerRef = customerRefController.text.trim();
-                final updatedSharepointLink = sharepointLinkController.text.trim();
-                final updatedSendConfirmationTo = sendConfirmationController.text.trim();
+                final updatedSharepointLink = sharepointLinkController.text
+                    .trim();
+                final updatedSendConfirmationTo = sendConfirmationController
+                    .text
+                    .trim();
 
                 try {
                   final result = await APIHelper.updateTicket(
@@ -1012,27 +1219,36 @@ class _TicketDescriptionScreenState extends State<TicketDescriptionScreenStatefu
                   if (result['Code'] == 300) {
                     Navigator.of(dialogContext).pop(); // ✅ Close dialog
 
-                    final updatedData = await APIHelper.fetchTicketDetails(ticketKey.toString());
+                    final updatedData = await APIHelper.fetchTicketDetails(
+                      ticketKey.toString(),
+                    );
                     if (updatedData != null && parentContext.mounted) {
                       setState(() {
                         ticketNumber = updatedData['TicketKey'] ?? '';
                         dateCreated = updatedData['StartDate'] ?? '';
                         assignedTo = updatedData['EmployeeName'] ?? 'N/A';
-                        currentStatus = (updatedData['Status'] == 'O')
-                            ? 'Open'
-                            : updatedData['Status'] ?? '';
+                        currentStatus = _statusDisplay(updatedData['Status']);
                         shortDescription = updatedData['ShortDesc'] ?? '';
-                        longDescription = _parseRtf(updatedData['LongDesc'] ?? '');
-                        customerReference = updatedData['CustomerReference'] ?? '';
+                        longDescription = _parseRtf(
+                          updatedData['LongDesc'] ?? '',
+                        );
+                        customerReference =
+                            updatedData['CustomerReference'] ?? '';
                         sharepointLink = updatedData['SharepointLink'] ?? '';
-                        sendConfirmationTo = updatedData['ConfirmationEmailTo'] ?? '';
+                        sendConfirmationTo =
+                            updatedData['ConfirmationEmailTo'] ?? '';
                       });
                     }
 
-                    await showMessageDialog(parentContext, 'Successfully Updated');
+                    await showMessageDialog(
+                      parentContext,
+                      'Successfully Updated',
+                    );
                   } else {
                     await showMessageDialog(
-                        parentContext, 'Update failed: ${result['Message']}');
+                      parentContext,
+                      'Update failed: ${result['Message']}',
+                    );
                   }
                 } catch (e) {
                   await showMessageDialog(parentContext, 'Error: $e');

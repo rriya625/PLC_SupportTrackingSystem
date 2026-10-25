@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
@@ -29,17 +30,16 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     _fetchMessageToList();
 
     // ✅ Autofocus after build
-     WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _messageFocusNode.requestFocus();
     });
-
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ticketKey ??= ModalRoute.of(context)?.settings.arguments as String?;
-    print('TicketKey passed: $_ticketKey');
+    debugPrint('Send message screen opened for ticket $_ticketKey');
   }
 
   @override
@@ -50,22 +50,28 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   }
 
   Future<void> _fetchMessageToList() async {
-    final url = Uri.parse('${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}');
-    final response = await http.get(url, headers: {
-      'Authorization': 'Bearer ${Constants.accessToken}',
-      'Accept': 'application/json',
-    });
+    final url = Uri.parse(
+      '${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}',
+    );
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer ${Constants.accessToken}',
+        'Accept': 'application/json',
+      },
+    );
 
     if (response.statusCode == 200) {
       final List<dynamic> jsonList = json.decode(response.body);
-      print('Response body: ${response.body}');
       setState(() {
         _messageToOptions = jsonList
             .map((e) => e['Option'].toString())
             .where((option) => option != 'O' && option != '-- No Selection --')
             .toList();
-        _selectedMessageTo = _messageToOptions.isNotEmpty ? _messageToOptions.first : null;
-        print('Dropdown options: $_messageToOptions');
+        _selectedMessageTo = _messageToOptions.isNotEmpty
+            ? _messageToOptions.first
+            : null;
+        debugPrint('Loaded ${_messageToOptions.length} message recipients');
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -77,9 +83,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   void _sendMessage() async {
     final message = _messageController.text.trim();
     if (_ticketKey == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ticket key is missing')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ticket key is missing')));
       return;
     }
 
@@ -91,9 +97,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     }
 
     if (message.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message cannot be empty')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Message cannot be empty')));
       return;
     }
 
@@ -104,9 +110,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       'UserID': Constants.userID.toString(),
       'UserName': _name,
     });
-
-    print('Sending message body: $body');
-    print('Using token: ${Constants.accessToken}');
 
     final response = await http.post(
       Uri.parse('${Constants.baseUrlData}SendMessage'),
@@ -124,17 +127,21 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       );
       setState(() {
         _messageController.clear();
-        _selectedMessageTo = _messageToOptions.isNotEmpty ? _messageToOptions.first : null;
+        _selectedMessageTo = _messageToOptions.isNotEmpty
+            ? _messageToOptions.first
+            : null;
       });
       FocusScope.of(context).unfocus();
-      await showMessageDialog(context, 'Your message has been successfully sent to Porter Lee Corporation.');
+      await showMessageDialog(
+        context,
+        'Your message has been successfully sent to Porter Lee Corporation.',
+      );
       Navigator.of(context).pop();
     } else {
-      print('Failed status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to send message')),
-      );
+      debugPrint('Send message failed with status ${response.statusCode}');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to send message')));
     }
   }
 
@@ -154,16 +161,27 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Agency: Porter Lee', style: TextStyle(fontSize: 16)),
+                const Text(
+                  'Agency: Porter Lee',
+                  style: TextStyle(fontSize: 16),
+                ),
                 const SizedBox(height: 12),
                 Text('Name: $_name', style: const TextStyle(fontSize: 16)),
                 const SizedBox(height: 24),
-                const Text('Send your message to:', style: TextStyle(fontSize: 16)),
+                const Text(
+                  'Send your message to:',
+                  style: TextStyle(fontSize: 16),
+                ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
                   value: _selectedMessageTo,
                   items: _messageToOptions
-                      .map((target) => DropdownMenuItem(value: target, child: Text(target)))
+                      .map(
+                        (target) => DropdownMenuItem(
+                          value: target,
+                          child: Text(target),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     setState(() {
@@ -172,11 +190,17 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   },
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text('Enter your message here:', style: TextStyle(fontSize: 16)),
+                const Text(
+                  'Enter your message here:',
+                  style: TextStyle(fontSize: 16),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _messageController,
@@ -195,7 +219,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          Navigator.pop(context); // or Navigator.of(context).maybePop();
+                          Navigator.pop(
+                            context,
+                          ); // or Navigator.of(context).maybePop();
                         },
                         icon: const Icon(Icons.cancel),
                         label: const Text('Cancel'),
@@ -203,7 +229,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                           backgroundColor: Colors.grey[300],
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
@@ -219,7 +247,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),

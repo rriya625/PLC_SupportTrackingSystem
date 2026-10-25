@@ -29,6 +29,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   final _confirmationToController = TextEditingController();
   final _customerSharepointLink = TextEditingController();
   final _shortDescFocus = FocusNode();
+  late final String _initialConfirmationEmail;
 
   // For web, store images as List<Uint8List>; for mobile, List<File>
   List<dynamic> _attachedImages = [];
@@ -137,12 +138,48 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   void initState() {
     super.initState();
     // Pre-fill the confirmation to controller with the email address.
-    _confirmationToController.text = Constants.emailAddress;
+    _initialConfirmationEmail = Constants.emailAddress;
+    _confirmationToController.text = _initialConfirmationEmail;
 
-     WidgetsBinding.instance.addPostFrameCallback((_) {
-       _shortDescFocus.requestFocus();
-     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _shortDescFocus.requestFocus();
+    });
     _loadPriorityOptions();
+  }
+
+  bool get _hasUnsavedChanges =>
+      _shortDescController.text.trim().isNotEmpty ||
+      _detailedDescController.text.trim().isNotEmpty ||
+      _customerRefController.text.trim().isNotEmpty ||
+      _customerSharepointLink.text.trim().isNotEmpty ||
+      _confirmationToController.text.trim() !=
+          _initialConfirmationEmail.trim() ||
+      _pendingWebFiles.isNotEmpty ||
+      _attachedImages.isNotEmpty;
+
+  Future<bool> _confirmDiscardChanges() async {
+    if (!_hasUnsavedChanges) return true;
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Discard this ticket?'),
+            content: const Text(
+              'Your ticket details and selected attachments will be lost.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Stay'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _loadPriorityOptions() async {
@@ -150,10 +187,13 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       final codeList = await APIHelper.getCodeList("PRIORITY");
       print('Priority options received: $codeList');
       setState(() {
-        _priorityOptions = codeList.map((e) => '${e['Code']} - ${e['Description']}').toList();
+        _priorityOptions = codeList
+            .map((e) => '${e['Code']} - ${e['Description']}')
+            .toList();
         _selectedPriority = _priorityOptions.firstWhere(
           (item) => item.startsWith("5 -"),
-          orElse: () => _priorityOptions.isNotEmpty ? _priorityOptions[0] : 'Normal',
+          orElse: () =>
+              _priorityOptions.isNotEmpty ? _priorityOptions[0] : 'Normal',
         );
       });
     } catch (e) {
@@ -166,308 +206,374 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: _confirmDiscardChanges,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Create New Ticket'),
+          centerTitle: true,
+          backgroundColor: Colors.blue[800],
+          foregroundColor: Colors.white,
+          automaticallyImplyLeading: true,
+        ),
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                // Priority Dropdown
+                _buildDropdownField(
+                  label: 'Priority',
+                  value: _selectedPriority,
+                  items: _priorityOptions,
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedPriority = val);
+                  },
+                ),
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create New Ticket'),
-        centerTitle: true,
-        backgroundColor: Colors.blue[800],
-        foregroundColor: Colors.white,
-        automaticallyImplyLeading: true,
-      ),
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              // Priority Dropdown
-              _buildDropdownField(
-                label: 'Priority',
-                value: _selectedPriority,
-                items: _priorityOptions,
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedPriority = val);
-                },
-              ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  label: 'Short Description',
+                  controller: _shortDescController,
+                  isRequired: true,
+                  errorText: shortDescError,
+                  maxLength: 250,
+                  focusNode: _shortDescFocus,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  label: 'Detailed Description',
+                  controller: _detailedDescController,
+                  maxLines: 4,
+                  isRequired: true,
+                  errorText: detailedDescError,
+                  maxLength: 4000,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  label: 'Customer Ref',
+                  controller: _customerRefController,
+                  maxLength: 20,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  label: 'Sharepoint Link',
+                  controller: _customerSharepointLink,
+                  maxLength: 250,
+                ),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  label: 'Send Confirmation To',
+                  controller: _confirmationToController,
+                  maxLength: 50,
+                ),
 
-              const SizedBox(height: 16),
-              _buildTextField(label: 'Short Description', controller: _shortDescController, isRequired: true, errorText: shortDescError, maxLength: 250, focusNode: _shortDescFocus),
-              const SizedBox(height: 16),
-              _buildTextField(
-                label: 'Detailed Description',
-                controller: _detailedDescController,
-                maxLines: 4,
-                isRequired: true,
-                errorText: detailedDescError,
-                maxLength: 4000,
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(label: 'Customer Ref', controller: _customerRefController, maxLength: 20),
-              const SizedBox(height: 16),
-              _buildTextField(label: 'Sharepoint Link', controller: _customerSharepointLink, maxLength: 250),
-              const SizedBox(height: 16),
-              _buildTextField(label: 'Send Confirmation To', controller: _confirmationToController, maxLength: 50),
+                const SizedBox(height: 24),
 
-              const SizedBox(height: 24),
-
-              // Upload File Button Only
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
+                // Upload File Button Only
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (kIsWeb) {
+                            //showUploadSpinner('Preparing preview...');
+                            pickFilesForWeb(
+                              pendingFiles: _pendingWebFiles,
+                              updateUI: () {
+                                setState(() {});
+                                print(
+                                  "🧩 Files picked for web upload: ${_pendingWebFiles.length}",
+                                );
+                                for (var file in _pendingWebFiles) {
+                                  print(
+                                    "📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes",
+                                  );
+                                }
+                                if (mounted) {
+                                  hideUploadSpinner();
+                                  _showWebFilesPreviewDialog();
+                                }
+                              },
+                            );
+                          } else {
+                            showModalBottomSheet(
+                              context: context,
+                              builder: (BuildContext context) {
+                                return Wrap(
+                                  children: [
+                                    ListTile(
+                                      leading: Icon(Icons.camera_alt),
+                                      title: Text('Take Photo'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickImageFromCamera();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.videocam),
+                                      title: Text('Record Video'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickVideoFromCamera();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.photo_library),
+                                      title: Text('Choose Photo from Gallery'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickImageFromGallery();
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: Icon(Icons.video_library),
+                                      title: Text('Choose Video from Gallery'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _pickVideoFromGallery();
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.lightBlueAccent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          _pendingWebFiles.isEmpty
+                              ? 'Attach File'
+                              : 'Attach More Files (${_pendingWebFiles.length} selected)',
+                          style: const TextStyle(color: Colors.black),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (_attachedImages.isNotEmpty || _pendingWebFiles.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: GestureDetector(
+                      onTap: () {
                         if (kIsWeb) {
-                          //showUploadSpinner('Preparing preview...');
-                          pickFilesForWeb(
-                            pendingFiles: _pendingWebFiles,
-                            updateUI: () {
-                              setState(() {});
-                              print("🧩 Files picked for web upload: ${_pendingWebFiles.length}");
-                              for (var file in _pendingWebFiles) {
-                                print("📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes");
-                              }
-                              if (mounted) {
-                                hideUploadSpinner();
-                                _showWebFilesPreviewDialog();
-                              }
-                            },
-                          );
+                          _showWebFilesPreviewDialog();
                         } else {
-                          showModalBottomSheet(
-                            context: context,
-                            builder: (BuildContext context) {
-                              return Wrap(
-                                children: [
-                                  ListTile(
-                                    leading: Icon(Icons.camera_alt),
-                                    title: Text('Take Photo'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickImageFromCamera();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.videocam),
-                                    title: Text('Record Video'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickVideoFromCamera();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.photo_library),
-                                    title: Text('Choose Photo from Gallery'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickImageFromGallery();
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: Icon(Icons.video_library),
-                                    title: Text('Choose Video from Gallery'),
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      _pickVideoFromGallery();
-                                    },
-                                  ),
-                                ],
-                              );
-                            },
-                          );
+                          _showMediaPreviewDialogOnly(context);
                         }
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.lightBlueAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Attach File', style: TextStyle(color: Colors.black)),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (_attachedImages.isNotEmpty || _pendingWebFiles.isNotEmpty)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: GestureDetector(
-                    onTap: () {
-                      if (kIsWeb) {
-                        _showWebFilesPreviewDialog();
-                      } else {
-                        _showMediaPreviewDialogOnly(context);
-                      }
-                    },
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: Text(
-                        kIsWeb
-                            ? 'Files Attached: ${_pendingWebFiles.length}'
-                            : 'Files Attached: ${_attachedImages.length}',
-                        style: const TextStyle(
-                          decoration: TextDecoration.underline,
-                          color: Colors.blue,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: Text(
+                          kIsWeb
+                              ? 'Files Attached: ${_pendingWebFiles.length}'
+                              : 'Files Attached: ${_attachedImages.length}',
+                          style: const TextStyle(
+                            decoration: TextDecoration.underline,
+                            color: Colors.blue,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Submit Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    showUploadSpinner('Uploading ticket and files...');
+                // Submit Button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      showUploadSpinner('Uploading ticket and files...');
 
-                    final shortDesc = _shortDescController.text.trim();
-                    final longDesc = _detailedDescController.text.trim();
+                      final shortDesc = _shortDescController.text.trim();
+                      final longDesc = _detailedDescController.text.trim();
 
-                    setState(() {
-                      shortDescError = shortDesc.isEmpty ? 'This field is required' : null;
-                      detailedDescError = longDesc.isEmpty ? 'This field is required' : null;
-                    });
-                    if (shortDescError != null || detailedDescError != null) {
-                      Navigator.of(context, rootNavigator: true).pop();
-                      return;
-                    }
-
-                    final priority = _selectedPriority.split(' - ').first;
-                    final customerReference = _customerRefController.text.trim();
-                    final confirmationTo = _confirmationToController.text.trim();
-                    final qbLinkKey = Constants.qbLinkKey;
-                    final userId = Constants.userID;
-                    final sharepointLink = _customerSharepointLink.text.trim();
-
-                    try {
-                      final response = await APIHelper.createTicket(
-                        prospectKey: userId,
-                        priority: priority,
-                        shortDesc: shortDesc,
-                        qbLinkKey: qbLinkKey,
-                        customerReference: customerReference,
-                        longDesc: longDesc,
-                        confirmationEmail: confirmationTo,
-                        SharepointLink: sharepointLink,
-                      );
-                      print('Create Ticket Response: $response');
-
-                      final ticketKey = response['Ticket Key'];
-
-                      // Upload attached images to the created ticket
-
-                      //print("🎫 Ticket Key: $ticketKey");
-                      try {
-                        //final ticketKey = response['Ticket Key'];
-                        print("🎫 Ticket Key: $ticketKey");
-                        print("📂 Pending web files count: ${_pendingWebFiles.length}");
-                        for (var file in _pendingWebFiles) {
-                          print("📄 Queued file: ${file['sFileName']} | Base64 Length: ${file['Base64Content']?.length ?? 0}");
-                        }
-                      } catch (e) {
-                        print("❌ Error while processing ticketKey or logging: $e");
+                      setState(() {
+                        shortDescError = shortDesc.isEmpty
+                            ? 'This field is required'
+                            : null;
+                        detailedDescError = longDesc.isEmpty
+                            ? 'This field is required'
+                            : null;
+                      });
+                      if (shortDescError != null || detailedDescError != null) {
+                        Navigator.of(context, rootNavigator: true).pop();
+                        return;
                       }
 
-                      print("🧪 _attachedImages.isNotEmpty: ${_attachedImages.isNotEmpty}");
-                      print("🧪 _pendingWebFiles.isNotEmpty: ${_pendingWebFiles.isNotEmpty}");
-                      print("🧪 kIsWeb: $kIsWeb");
+                      final priority = _selectedPriority.split(' - ').first;
+                      final customerReference = _customerRefController.text
+                          .trim();
+                      final confirmationTo = _confirmationToController.text
+                          .trim();
+                      final qbLinkKey = Constants.qbLinkKey;
+                      final userId = Constants.userID;
+                      final sharepointLink = _customerSharepointLink.text
+                          .trim();
 
-                      if (_attachedImages.isNotEmpty || (kIsWeb && _pendingWebFiles.isNotEmpty)) {
+                      try {
+                        final response = await APIHelper.createTicket(
+                          prospectKey: userId,
+                          priority: priority,
+                          shortDesc: shortDesc,
+                          qbLinkKey: qbLinkKey,
+                          customerReference: customerReference,
+                          longDesc: longDesc,
+                          confirmationEmail: confirmationTo,
+                          SharepointLink: sharepointLink,
+                        );
+                        print('Create Ticket Response: $response');
+
+                        final ticketKey = response['Ticket Key'];
+
+                        // Upload attached images to the created ticket
+
+                        //print("🎫 Ticket Key: $ticketKey");
                         try {
-                          print("try upload ....");
-                          if (kIsWeb) {
-                            if (_pendingWebFiles.isEmpty) {
-                              hideUploadSpinner();
-                              return;
-                            }
-
-                            print("🚀 Calling uploadPickedFilesWeb...");
-                            await uploadPickedFilesWeb(
-                              int.parse(ticketKey.toString()),
-                              _pendingWebFiles,
+                          //final ticketKey = response['Ticket Key'];
+                          print("🎫 Ticket Key: $ticketKey");
+                          print(
+                            "📂 Pending web files count: ${_pendingWebFiles.length}",
+                          );
+                          for (var file in _pendingWebFiles) {
+                            print(
+                              "📄 Queued file: ${file['sFileName']} | Base64 Length: ${file['Base64Content']?.length ?? 0}",
                             );
-                            print("✅ Finished uploadPickedFilesWeb");
-
-                            _pendingWebFiles.clear();
-
-                            if (context.mounted) {
-                              await _showUploadResultDialog(context, 200);
-                            }
-                          } else {
-                            final filesToUpload = _attachedImages.whereType<File>().toList();
-
-                            final response = await APIHelper.uploadFiles(
-                              ticketKey: int.parse(ticketKey.toString()),
-                              prospectKey: Constants.userID,
-                              fileList: filesToUpload,
-                            );
-
-                            if (context.mounted) {
-                              await _showUploadResultDialog(context, response.statusCode);
-                            }
                           }
-
-                          setState(() => _attachedImages.clear());
                         } catch (e) {
-                          print('try catch $e');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('File upload failed: $e')),
+                          print(
+                            "❌ Error while processing ticketKey or logging: $e",
                           );
                         }
-                      }
 
-                      hideUploadSpinner();
-
-                      // ✅ Only navigate now
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Ticket created: #$ticketKey')),
+                        print(
+                          "🧪 _attachedImages.isNotEmpty: ${_attachedImages.isNotEmpty}",
                         );
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const TicketDescriptionScreenStateful(),
-                            settings: RouteSettings(arguments: ticketKey.toString()),
+                        print(
+                          "🧪 _pendingWebFiles.isNotEmpty: ${_pendingWebFiles.isNotEmpty}",
+                        );
+                        print("🧪 kIsWeb: $kIsWeb");
+
+                        if (_attachedImages.isNotEmpty ||
+                            (kIsWeb && _pendingWebFiles.isNotEmpty)) {
+                          try {
+                            print("try upload ....");
+                            if (kIsWeb) {
+                              if (_pendingWebFiles.isEmpty) {
+                                hideUploadSpinner();
+                                return;
+                              }
+
+                              print("🚀 Calling uploadPickedFilesWeb...");
+                              await uploadPickedFilesWeb(
+                                int.parse(ticketKey.toString()),
+                                _pendingWebFiles,
+                              );
+                              print("✅ Finished uploadPickedFilesWeb");
+
+                              _pendingWebFiles.clear();
+
+                              if (context.mounted) {
+                                await _showUploadResultDialog(context, 200);
+                              }
+                            } else {
+                              final filesToUpload = _attachedImages
+                                  .whereType<File>()
+                                  .toList();
+
+                              final response = await APIHelper.uploadFiles(
+                                ticketKey: int.parse(ticketKey.toString()),
+                                prospectKey: Constants.userID,
+                                fileList: filesToUpload,
+                              );
+
+                              if (context.mounted) {
+                                await _showUploadResultDialog(
+                                  context,
+                                  response.statusCode,
+                                );
+                              }
+                            }
+
+                            setState(() => _attachedImages.clear());
+                          } catch (e) {
+                            print('try catch $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('File upload failed: $e')),
+                            );
+                          }
+                        }
+
+                        hideUploadSpinner();
+
+                        // ✅ Only navigate now
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Ticket created: #$ticketKey'),
+                            ),
+                          );
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const TicketDescriptionScreenStateful(),
+                              settings: RouteSettings(
+                                arguments: ticketKey.toString(),
+                              ),
+                            ),
+                          );
+                        }
+
+                        // Clear fields after successful submission
+                        setState(() {
+                          _shortDescController.clear();
+                          _detailedDescController.clear();
+                          _customerRefController.clear();
+                          _customerSharepointLink.clear();
+                          _selectedPriority = _priorityOptions.firstWhere(
+                            (item) => item.startsWith("5 -"),
+                            orElse: () => _priorityOptions.isNotEmpty
+                                ? _priorityOptions[0]
+                                : 'Normal',
+                          );
+                        });
+                      } catch (e) {
+                        Navigator.of(context, rootNavigator: true).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to create ticket: $e'),
                           ),
                         );
                       }
-
-                      // Clear fields after successful submission
-                      setState(() {
-                        _shortDescController.clear();
-                        _detailedDescController.clear();
-                        _customerRefController.clear();
-                        _customerSharepointLink.clear();
-                        _selectedPriority = _priorityOptions.firstWhere(
-                          (item) => item.startsWith("5 -"),
-                          orElse: () => _priorityOptions.isNotEmpty ? _priorityOptions[0] : 'Normal',
-                        );
-                      });
-                    } catch (e) {
-                      Navigator.of(context, rootNavigator: true).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Failed to create ticket: $e')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.send),
-                  label: const Text('Submit'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.lightBlueAccent,
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    },
+                    icon: const Icon(Icons.send),
+                    label: const Text('Submit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.lightBlueAccent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 30),
+                const SizedBox(height: 30),
 
-              // Bottom icon image
-              //const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
-            ],
+                // Bottom icon image
+                //const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
+              ],
+            ),
           ),
         ),
       ),
@@ -492,7 +598,12 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
             text: label,
             style: const TextStyle(fontSize: 16),
             children: isRequired
-                ? [const TextSpan(text: ' *', style: TextStyle(color: Colors.red))]
+                ? [
+                    const TextSpan(
+                      text: ' *',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ]
                 : [],
           ),
         ),
@@ -504,7 +615,10 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
           maxLength: maxLength > 0 ? maxLength : null,
           decoration: InputDecoration(
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
             errorText: errorText,
           ),
         ),
@@ -512,13 +626,18 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     );
   }
 
-  Future<void> _showUploadResultDialog(BuildContext context, int statusCode) async {
+  Future<void> _showUploadResultDialog(
+    BuildContext context,
+    int statusCode,
+  ) async {
     await showDialog(
       context: context,
       useRootNavigator: true,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -573,7 +692,11 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
             items: items.map((priority) {
               return DropdownMenuItem(
                 value: priority,
-                child: Text(priority.contains(' - ') ? priority.split(' - ').last : priority),
+                child: Text(
+                  priority.contains(' - ')
+                      ? priority.split(' - ').last
+                      : priority,
+                ),
               );
             }).toList(),
             onChanged: onChanged,
@@ -644,15 +767,15 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                         ? item.path.split('/').last
                         : 'Image';
 
-                    final bool isVideo = isFile &&
-                        item.path.toLowerCase().endsWith('.mp4');
+                    final bool isVideo =
+                        isFile && item.path.toLowerCase().endsWith('.mp4');
 
                     final bool isImage = isFile
                         ? item.path.toLowerCase().endsWith('.png') ||
-                        item.path.toLowerCase().endsWith('.jpg') ||
-                        item.path.toLowerCase().endsWith('.jpeg') ||
-                        item.path.toLowerCase().endsWith('.gif') ||
-                        item.path.toLowerCase().endsWith('.webp')
+                              item.path.toLowerCase().endsWith('.jpg') ||
+                              item.path.toLowerCase().endsWith('.jpeg') ||
+                              item.path.toLowerCase().endsWith('.gif') ||
+                              item.path.toLowerCase().endsWith('.webp')
                         : item is Uint8List;
 
                     return Padding(
@@ -669,24 +792,33 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                             borderRadius: BorderRadius.circular(8),
                             child: isVideo
                                 ? Container(
-                              height: 200,
-                              color: Colors.black12,
-                              child: const Center(
-                                child: Icon(Icons.videocam,
-                                    size: 50, color: Colors.grey),
-                              ),
-                            )
+                                    height: 200,
+                                    color: Colors.black12,
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.videocam,
+                                        size: 50,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  )
                                 : isImage
                                 ? (kIsWeb
-                                ? Image.memory(item as Uint8List,
-                                height: 200, fit: BoxFit.cover)
-                                : Image.file(item as File,
-                                height: 200, fit: BoxFit.cover))
+                                      ? Image.memory(
+                                          item as Uint8List,
+                                          height: 200,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          item as File,
+                                          height: 200,
+                                          fit: BoxFit.cover,
+                                        ))
                                 : Image.asset(
-                              'assets/preview_not_supported.png',
-                              height: 200,
-                              fit: BoxFit.contain,
-                            ),
+                                    'assets/preview_not_supported.png',
+                                    height: 200,
+                                    fit: BoxFit.contain,
+                                  ),
                           ),
                         ],
                       ),
@@ -794,7 +926,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         lower.endsWith('.heif');
   }
 
-// Decodes base64 image content safely (used for preview)
+  // Decodes base64 image content safely (used for preview)
   Uint8List? _decodeBase64ForPreview(String? maybeB64) {
     if (maybeB64 == null || maybeB64.isEmpty) return null;
     try {
@@ -825,7 +957,9 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       final name = (file['sFileName'] ?? '').toString();
                       final base64 = (file['Base64Content'] ?? '').toString();
                       final isImage = _isImageFile(name);
-                      final Uint8List? bytes = isImage ? _decodeBase64ForPreview(base64) : null;
+                      final Uint8List? bytes = isImage
+                          ? _decodeBase64ForPreview(base64)
+                          : null;
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
@@ -843,12 +977,16 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: isImage && bytes != null
-                                  ? Image.memory(bytes, height: 200, fit: BoxFit.cover)
+                                  ? Image.memory(
+                                      bytes,
+                                      height: 200,
+                                      fit: BoxFit.cover,
+                                    )
                                   : Image.asset(
-                                'assets/preview_not_supported.png',
-                                height: 200,
-                                fit: BoxFit.contain,
-                              ),
+                                      'assets/preview_not_supported.png',
+                                      height: 200,
+                                      fit: BoxFit.contain,
+                                    ),
                             ),
                           ],
                         ),
@@ -875,8 +1013,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       pendingFiles: _pendingWebFiles,
                       //attachedImages: _attachedImages,
                       updateUI: () {
-                        setState(() {});        // update outer UI
-                        setStateDialog(() {});  // refresh dialog contents
+                        setState(() {}); // update outer UI
+                        setStateDialog(() {}); // refresh dialog contents
                         //hideUploadSpinner();
                       },
                     );
@@ -888,7 +1026,9 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   child: const Text('Done'),
                 ),
               ],
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
             );
           },
         );

@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
-import 'package:ticket_tracker_app/screens/ticket_description_screen.dart';
-import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ViewActivityScreen extends StatefulWidget {
@@ -33,6 +31,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   Future<void> fetchActivityData() async {
     try {
       final data = await APIHelper.getActivityMessages(widget.ticketNumber);
+      if (!mounted) return;
       setState(() {
         activityData = data;
       });
@@ -48,6 +47,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     bool isCritical = false;
     bool showPriorityError = false;
     bool showMessageError = false;
+    bool isSubmitting = false;
 
     showDialog(
       context: context,
@@ -109,71 +109,97 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          Navigator.pop(context);
+                          await fetchActivityData();
+                        },
                   child: const Text('Cancel'),
                 ),
                 TextButton(
-                  onPressed: () async {
-                    setState(() {
-                      showPriorityError = selectedPriorityCode == null;
-                      showMessageError = messageController.text.trim().isEmpty;
-                    });
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          setState(() {
+                            showPriorityError = selectedPriorityCode == null;
+                            showMessageError = messageController.text
+                                .trim()
+                                .isEmpty;
+                          });
 
-                    if (showPriorityError || showMessageError) return;
+                          if (showPriorityError || showMessageError) return;
 
-                    final payload = {
-                      "TicketKey": int.tryParse(widget.ticketNumber) ?? 0,
-                      "ProspectKey": Constants.userID,
-                      "LongDesc": messageController.text.trim(),
-                      "Priority": selectedPriorityCode!,
-                      "Critical": isCritical ? "Y" : "N",
-                    };
+                          setState(() => isSubmitting = true);
 
-                    final url = Uri.parse('${Constants.baseUrlData}CreateActivity');
+                          final payload = {
+                            "TicketKey": int.tryParse(widget.ticketNumber) ?? 0,
+                            "ProspectKey": Constants.userID,
+                            "LongDesc": messageController.text.trim(),
+                            "Priority": selectedPriorityCode!,
+                            "Critical": isCritical ? "Y" : "N",
+                          };
 
-                    try {
-                      final response = await http.post(
-                        url,
-                        headers: {
-                          'Authorization': 'Bearer ${Constants.accessToken}',
-                          'Content-Type': 'application/json',
-                        },
-                        body: jsonEncode(payload),
-                      );
-
-                      if (response.statusCode == 200) {
-                        if (!context.mounted) return;
-                        hideUploadSpinner();
-                        Navigator.pop(context);
-                        fetchActivityData(); // ✅ refresh activity list
-                      } else {
-                        debugPrint('❌ Failed to create activity: ${response.statusCode}');
-                        debugPrint('Body: ${response.body}');
-                        debugPrint('Payload: ${jsonEncode(payload)}');
-                        if (context.mounted) {
-                          hideUploadSpinner();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to create activity.')),
+                          final url = Uri.parse(
+                            '${Constants.baseUrlData}CreateActivity',
                           );
-                        }
-                      }
-                    } catch (e) {
-                      debugPrint('❌ Error posting activity: $e');
-                      if (context.mounted) {
-                        hideUploadSpinner();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error posting activity: $e')),
-                        );
-                      }
-                    }
-                  },
+
+                          try {
+                            final response = await http.post(
+                              url,
+                              headers: {
+                                'Authorization':
+                                    'Bearer ${Constants.accessToken}',
+                                'Content-Type': 'application/json',
+                              },
+                              body: jsonEncode(payload),
+                            );
+
+                            if (response.statusCode == 200) {
+                              if (!context.mounted) return;
+                              Navigator.pop(context);
+                              await fetchActivityData();
+                            } else {
+                              debugPrint(
+                                'Failed to create activity: ${response.statusCode}',
+                              );
+                              if (context.mounted) {
+                                setState(() => isSubmitting = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to create activity.'),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint('Error posting activity: $e');
+                            if (context.mounted) {
+                              setState(() => isSubmitting = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Unable to create activity. Please try again.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.blue[800],
                     foregroundColor: Colors.white,
                   ),
-                  child: const Text('Submit'),
+                  child: isSubmitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Submit'),
                 ),
               ],
             );
@@ -210,7 +236,10 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                     Expanded(
                       child: Text(
                         'Activities for Ticket #${widget.ticketNumber}',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -221,7 +250,10 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[800],
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                       ),
                     ),
                   ],
@@ -245,10 +277,14 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                   return SizedBox(
                     width: double.infinity,
                     child: Card(
-                      color: index % 2 == 0 ? Colors.grey[200] : Colors.blue[50],
+                      color: index % 2 == 0
+                          ? Colors.grey[200]
+                          : Colors.blue[50],
                       margin: const EdgeInsets.only(bottom: 16),
                       elevation: 4,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -256,9 +292,17 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                           children: [
                             RichText(
                               text: TextSpan(
-                                style: const TextStyle(fontSize: 14, color: Colors.black),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
                                 children: [
-                                  const TextSpan(text: 'Entry Date: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const TextSpan(
+                                    text: 'Entry Date: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   TextSpan(text: '${item['EntryDate'] ?? ''}'),
                                 ],
                               ),
@@ -266,19 +310,37 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                             const SizedBox(height: 8),
                             RichText(
                               text: TextSpan(
-                                style: const TextStyle(fontSize: 14, color: Colors.black),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
                                 children: [
-                                  const TextSpan(text: 'Activity Type: ', style: TextStyle(fontWeight: FontWeight.bold)),
-                                  TextSpan(text: '${item['ActivityType'] ?? ''}'),
+                                  const TextSpan(
+                                    text: 'Activity Type: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: '${item['ActivityType'] ?? ''}',
+                                  ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 8),
                             RichText(
                               text: TextSpan(
-                                style: const TextStyle(fontSize: 14, color: Colors.black),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
                                 children: [
-                                  const TextSpan(text: 'Entered By: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const TextSpan(
+                                    text: 'Entered By: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   TextSpan(text: '${item['EnteredBy'] ?? ''}'),
                                 ],
                               ),
@@ -286,9 +348,17 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                             const SizedBox(height: 8),
                             RichText(
                               text: TextSpan(
-                                style: const TextStyle(fontSize: 14, color: Colors.black),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
                                 children: [
-                                  const TextSpan(text: 'Description: ', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  const TextSpan(
+                                    text: 'Description: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                   TextSpan(text: '${item['LongDesc'] ?? ''}'),
                                 ],
                               ),

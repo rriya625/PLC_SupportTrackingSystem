@@ -7,30 +7,34 @@ class Constants {
   // --- Fallback values from build-time dart-define ---
   static final String _baseUrlAuthDefine = const String.fromEnvironment(
     'BASE_URL_AUTH',
-    defaultValue:
-    'https://support.porterlee.com/plc/intf/prospect/Auth0001/DEV/LoginAuth0001Service/',
+    defaultValue: '',
   );
 
   static final String _baseUrlDataDefine = const String.fromEnvironment(
     'BASE_URL_DATA',
-    defaultValue:
-    'https://support.porterlee.com/plc/intf/prospect/intf4010/DEV/BEASTProspectIntf4010APIService/',
+    defaultValue: '',
   );
 
   static bool get isMobileWeb =>
       kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.iOS ||
-              defaultTargetPlatform == TargetPlatform.android);
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android);
 
   static final String _buildEnvDefine = const String.fromEnvironment(
     'BUILD_ENV',
     defaultValue: 'dev',
   );
 
+  static const String _appBuildVersionDefine = String.fromEnvironment(
+    'APP_BUILD_VERSION',
+    defaultValue: 'local',
+  );
+
   // --- Effective values (can be overridden by config.json) ---
   static String baseUrlAuth = _baseUrlAuthDefine;
   static String baseUrlData = _baseUrlDataDefine;
   static String buildEnv = _buildEnvDefine;
+  static String appBuildVersion = _appBuildVersionDefine;
 
   static String? logUploadUrl;
   static String? hostEnv;
@@ -43,6 +47,8 @@ class Constants {
   static int userID = 0;
   static String userPassword = '';
   static String departmentName = '';
+  static String userType = '';
+  static String accessLevel = '';
   static String contactName = '';
   static String qbLinkKey = '';
   static String emailAddress = '';
@@ -51,6 +57,7 @@ class Constants {
 
   static bool get isDev => buildEnv.toLowerCase() == 'dev';
   static bool get isProd => buildEnv.toLowerCase() == 'prod';
+  static bool get isEmployee => userType.trim().toUpperCase() == 'EMPLOYEE';
 
   /// Normalize a base URL so it always ends with `/`
   static String _normalizeUrl(String url) {
@@ -61,7 +68,7 @@ class Constants {
   /// Loads configuration values from config.json (web only).
   static Future<void> loadConfig() async {
     if (!kIsWeb) {
-      print('[Constants] Not web — skipping config.json load');
+      _validateServiceUrls();
       return;
     }
 
@@ -95,16 +102,31 @@ class Constants {
         logUploadUrl = map['LOG_UPLOAD_URL']?.toString();
         hostEnv = map['HOST_ENV']?.toString();
         manualDownloadUrl = map['MANUAL_DOWNLOAD_URL']?.toString();
+        appBuildVersion = map['BUILD_VERSION']?.toString() ?? appBuildVersion;
 
         print('logUploadUrl: $logUploadUrl');
         print('hostEnv: $hostEnv');
         print('manualDownloadUrl: $manualDownloadUrl');
-
       } else {
-        print('[Constants] config.json not found or empty, using dart-define defaults');
+        print(
+          '[Constants] config.json not found or empty, using dart-define defaults',
+        );
       }
     } catch (e) {
-      print('[Constants] Error loading config.json: $e — using dart-define defaults');
+      print(
+        '[Constants] Error loading config.json: $e — using dart-define defaults',
+      );
+    }
+
+    _validateServiceUrls();
+  }
+
+  static void _validateServiceUrls() {
+    if (baseUrlAuth.isEmpty || baseUrlData.isEmpty) {
+      throw StateError(
+        'Missing service configuration. Provide AUTH_BASE_URL and '
+        'INTERFACE_BASE_URL in config.json or with --dart-define.',
+      );
     }
   }
 }

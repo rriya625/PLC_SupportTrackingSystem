@@ -1,5 +1,7 @@
 {
   "APP_ENV": "prod",
+  "AUTH_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/Auth0001/PROD/LoginAuth0001Service/",
+  "INTERFACE_BASE_URL": "https://support.porterlee.com/plc/intf/prospect/intf4010/PROD/BEASTProspectIntf4010APIService/",
   "LABSAVEDIR": "C:\\LABSAVE\\SUPPORT_WEB_PROD\\",
   "LOG_UPLOAD_URL": "upload_log.ashx",
   "MANUAL_DOWNLOAD_URL": "download_manual.ashx",
