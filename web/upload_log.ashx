@@ -4,9 +4,9 @@ using System;
 using System.Collections;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Text;
 using System.Web;
 using System.Web.Script.Serialization;
 
@@ -138,16 +138,7 @@ public class UploadLogHandler : IHttpHandler
         context.Response.ContentType = "application/zip";
         context.Response.AddHeader("Content-Disposition", "attachment; filename=\"" + zipName + "\"");
 
-        using (var archive = new ZipArchive(context.Response.OutputStream, ZipArchiveMode.Create, true))
-        {
-            foreach (string file in files.OrderBy(path => path))
-            {
-                var entry = archive.CreateEntry(Path.GetFileName(file), CompressionLevel.Optimal);
-                using (var input = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                using (var output = entry.Open())
-                    input.CopyTo(output);
-            }
-        }
+        WriteZip(context.Response.OutputStream, files.OrderBy(path => path).ToArray());
     }
 
     private static void ValidateDebugUser(HttpContext context)
@@ -204,6 +195,125 @@ public class UploadLogHandler : IHttpHandler
                 logDir = Convert.ToString(config["LABSAVEDIR"]);
         }
         return string.IsNullOrWhiteSpace(logDir) ? @"C:\LABSAVE\SUPPORT_WEB_DEV\" : logDir;
+    }
+
+    // Writes standards-compliant ZIP entries using the STORE method. This
+    // avoids a System.IO.Compression assembly dependency in ASP.NET dynamic
+    // compilation on the current IIS server.
+    private static void WriteZip(Stream output, string[] files)
+    {
+        var records = new System.Collections.Generic.List<ZipRecord>();
+        var writer = new BinaryWriter(output, Encoding.UTF8, true);
+        uint offset = 0;
+
+        foreach (string path in files)
+        {
+            var info = new FileInfo(path);
+            if (info.Length > UInt32.MaxValue)
+                throw new InvalidOperationException("A log file is too large for ZIP download.");
+
+            byte[] name = Encoding.UTF8.GetBytes(Path.GetFileName(path));
+            uint size = (uint)info.Length;
+            uint crc = CalculateCrc32(path);
+            ushort dosTime;
+            ushort dosDate;
+            GetDosDateTime(info.LastWriteTime, out dosTime, out dosDate);
+
+            records.Add(new ZipRecord {
+                Name = name,
+                Crc = crc,
+                Size = size,
+                Offset = offset,
+                Time = dosTime,
+                Date = dosDate
+            });
+
+            writer.Write(0x04034b50u);
+            writer.Write((ushort)20);
+            writer.Write((ushort)0x0800);
+            writer.Write((ushort)0);
+            writer.Write(dosTime);
+            writer.Write(dosDate);
+            writer.Write(crc);
+            writer.Write(size);
+            writer.Write(size);
+            writer.Write((ushort)name.Length);
+            writer.Write((ushort)0);
+            writer.Write(name);
+
+            using (var input = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                input.CopyTo(output);
+
+            offset += (uint)(30 + name.Length) + size;
+        }
+
+        uint centralOffset = offset;
+        foreach (ZipRecord record in records)
+        {
+            writer.Write(0x02014b50u);
+            writer.Write((ushort)20);
+            writer.Write((ushort)20);
+            writer.Write((ushort)0x0800);
+            writer.Write((ushort)0);
+            writer.Write(record.Time);
+            writer.Write(record.Date);
+            writer.Write(record.Crc);
+            writer.Write(record.Size);
+            writer.Write(record.Size);
+            writer.Write((ushort)record.Name.Length);
+            writer.Write((ushort)0);
+            writer.Write((ushort)0);
+            writer.Write((ushort)0);
+            writer.Write((ushort)0);
+            writer.Write(0u);
+            writer.Write(record.Offset);
+            writer.Write(record.Name);
+            offset += (uint)(46 + record.Name.Length);
+        }
+
+        uint centralSize = offset - centralOffset;
+        writer.Write(0x06054b50u);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write((ushort)records.Count);
+        writer.Write((ushort)records.Count);
+        writer.Write(centralSize);
+        writer.Write(centralOffset);
+        writer.Write((ushort)0);
+        writer.Flush();
+    }
+
+    private static uint CalculateCrc32(string path)
+    {
+        uint crc = 0xffffffffu;
+        using (var input = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        {
+            int value;
+            while ((value = input.ReadByte()) != -1)
+            {
+                crc ^= (byte)value;
+                for (int bit = 0; bit < 8; bit++)
+                    crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xedb88320u : crc >> 1;
+            }
+        }
+        return crc ^ 0xffffffffu;
+    }
+
+    private static void GetDosDateTime(DateTime value, out ushort time, out ushort date)
+    {
+        int year = Math.Max(1980, Math.Min(2107, value.Year));
+        time = (ushort)((value.Hour << 11) | (value.Minute << 5) | (value.Second / 2));
+        date = (ushort)(((year - 1980) << 9) | (value.Month << 5) | value.Day);
+    }
+
+    private sealed class ZipRecord
+    {
+        public byte[] Name;
+        public uint Crc;
+        public uint Size;
+        public uint Offset;
+        public ushort Time;
+        public ushort Date;
     }
 
     private static void WriteError(HttpContext context, int statusCode, string message)
