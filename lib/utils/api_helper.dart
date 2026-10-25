@@ -105,6 +105,7 @@ class APIHelper {
     // Debug logging is opt-in per authenticated account. Never carry a prior
     // user's setting into a new login attempt.
     Constants.debugMode = 'N';
+    WebLogHelper.clear();
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
 
@@ -177,8 +178,8 @@ class APIHelper {
 
     if (response.statusCode == 200) {
       final userData = jsonDecode(response.body);
-      // DEBUG_MODE is intentionally read first. Older services omit it and
-      // therefore remain safely defaulted to N.
+      // DEBUG_MODE is intentionally read first. T enables diagnostics; older
+      // services omit it and therefore remain safely defaulted to N.
       Constants.debugMode = userData['DEBUG_MODE']?.toString() ?? 'N';
       if (Constants.isDebugModeEnabled) {
         await WebLogHelper.logApiResponse(

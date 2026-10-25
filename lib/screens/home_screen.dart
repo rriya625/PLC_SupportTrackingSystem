@@ -120,6 +120,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    if (Constants.isDebugModeEnabled) ...[
+                      _buildMainButton(
+                        icon: Icons.download_for_offline_outlined,
+                        label: 'Download Diagnostic Log',
+                        onTap: _downloadDiagnosticLog,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     _buildMainButton(
                       icon: Icons.menu_book,
                       label: 'Download User Manual',
@@ -139,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Constants.userID = 0;
                         Constants.contactName = '';
                         Constants.debugMode = 'N';
+                        WebLogHelper.clear();
 
                         Navigator.pushAndRemoveUntil(
                           context,
@@ -243,6 +253,60 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _downloadDiagnosticLog() async {
+    try {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Download Diagnostic Log'),
+          content: const Text(
+            'Download the most recent log file or all log files for a specific day?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'day'),
+              child: const Text('Choose Day'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'latest'),
+              child: const Text('Most Recent'),
+            ),
+          ],
+        ),
+      );
+      if (choice == null || !mounted) return;
+
+      String? date;
+      if (choice == 'day') {
+        final selected = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now(),
+        );
+        if (selected == null) return;
+        date =
+            '${selected.year.toString().padLeft(4, '0')}-'
+            '${selected.month.toString().padLeft(2, '0')}-'
+            '${selected.day.toString().padLeft(2, '0')}';
+      }
+
+      await WebLogHelper.downloadServerLog(date: date);
+    } catch (error) {
+      debugPrint('Diagnostic log save was cancelled or failed: $error');
+      if (mounted) {
+        await showMessageDialog(
+          context,
+          'Unable to download the diagnostic log. $error',
+        );
+      }
+    }
   }
 
   /// Builds a large rounded button with icon and label.
