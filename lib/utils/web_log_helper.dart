@@ -8,7 +8,7 @@ class WebLogHelper {
   /// Includes timestamp and user ID for traceability.
   static Future<void> log(String message) async {
     // Only applies to Flutter Web
-    if (!kIsWeb) return;
+    if (!kIsWeb || !Constants.isDebugModeEnabled) return;
 
     // Optionally restrict to Windows IIS-hosted environments
     if (Constants.hostEnv?.toLowerCase() != 'windows') {
@@ -38,10 +38,37 @@ class WebLogHelper {
       if (response.statusCode == 200) {
         print('[WebLogHelper] Log uploaded successfully.');
       } else {
-        print('[WebLogHelper] Failed to upload log (HTTP ${response.statusCode}).');
+        print(
+          '[WebLogHelper] Failed to upload log (HTTP ${response.statusCode}).',
+        );
       }
     } catch (e) {
       print('[WebLogHelper] Error sending log: $e');
+    }
+  }
+
+  /// Logs a service response without including request headers or credentials.
+  static Future<void> logApiResponse({
+    required String endpoint,
+    required int httpStatus,
+    required String responseBody,
+  }) async {
+    if (!Constants.isDebugModeEnabled) return;
+    await log(
+      jsonEncode({
+        'environment': Constants.buildEnv,
+        'endpoint': endpoint,
+        'httpStatus': httpStatus,
+        'response': _decodeResponse(responseBody),
+      }),
+    );
+  }
+
+  static dynamic _decodeResponse(String responseBody) {
+    try {
+      return jsonDecode(responseBody);
+    } catch (_) {
+      return responseBody;
     }
   }
 }

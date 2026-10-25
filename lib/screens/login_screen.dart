@@ -4,7 +4,6 @@ import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/screens/home_screen.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/widgets/build_version_label.dart';
-import '../utils/web_log_helper.dart';
 
 class LoginScreen extends StatefulWidget {
   final TextEditingController userIdController = TextEditingController();
@@ -193,8 +192,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     String userId = widget.userIdController.text.trim();
     String password = widget.passwordController.text;
-
-    await WebLogHelper.log("User attempting to login with User ID: $userId");
 
     if (userId.isEmpty && password.isEmpty) {
       errorNotifier.value = 'Please enter both User ID and Password.';

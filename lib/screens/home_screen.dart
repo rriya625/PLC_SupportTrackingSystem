@@ -138,6 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         // Optionally clear user session variables
                         Constants.userID = 0;
                         Constants.contactName = '';
+                        Constants.debugMode = 'N';
 
                         Navigator.pushAndRemoveUntil(
                           context,

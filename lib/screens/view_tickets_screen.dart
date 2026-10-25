@@ -128,7 +128,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   String? get _departmentCodeForRequest {
     if (!Constants.isEmployee) return Constants.qbLinkKey;
     final code = selectedDepartmentCode?.trim() ?? '';
-    return code.isEmpty ? 'ALL' : code;
+    return code.isEmpty || code == 'ALL' ? null : code;
   }
 
   bool get _isUnboundedDepartmentSearch {
@@ -137,7 +137,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         (searchBy == 'Ticket #' || searchBy == 'Description');
     return Constants.isEmployee &&
         ticketType == 'Department' &&
-        _departmentCodeForRequest == 'ALL' &&
+        _departmentCodeForRequest == null &&
         !hasSearchValue;
   }
 
@@ -865,45 +865,129 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
       children: [
         const Text('Department', style: TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(height: 4),
-        DropdownMenu<String>(
-          key: ValueKey(
-            'department-$selectedCode-${departments.length}-$isDepartmentLoading',
-          ),
-          initialSelection: selectedCode,
-          enabled: !isDepartmentLoading && Constants.isEmployee,
-          enableFilter: Constants.isEmployee,
-          enableSearch: Constants.isEmployee,
-          requestFocusOnTap: Constants.isEmployee,
-          expandedInsets: EdgeInsets.zero,
-          leadingIcon: Constants.isEmployee
-              ? const Icon(Icons.search)
-              : const Icon(Icons.lock_outline),
-          hintText: isDepartmentLoading
-              ? 'Loading departments...'
-              : 'Search by code or description',
-          helperText: Constants.isEmployee
-              ? 'Type a department code or name to filter the list.'
-              : 'Your department is assigned by your account.',
-          inputDecorationTheme: const InputDecorationTheme(
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-          ),
-          dropdownMenuEntries: departments.map((department) {
-            final code = department['Code'] ?? '';
-            final description = department['Description'] ?? '';
-            final label = code == 'ALL' ? description : '$code - $description';
-            return DropdownMenuEntry(value: code, label: label);
-          }).toList(),
-          onSelected: isDepartmentLoading || !Constants.isEmployee
+        InkWell(
+          onTap: isDepartmentLoading || !Constants.isEmployee
               ? null
-              : (value) {
-                  if (value != null) {
-                    setState(() => selectedDepartmentCode = value);
-                  }
-                },
+              : _showDepartmentPicker,
+          borderRadius: BorderRadius.circular(10),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 14,
+              ),
+              prefixIcon: Icon(
+                Constants.isEmployee ? Icons.search : Icons.lock_outline,
+              ),
+              suffixIcon: Constants.isEmployee
+                  ? const Icon(Icons.arrow_drop_down)
+                  : null,
+              helperText: Constants.isEmployee
+                  ? 'Select a department, then type to filter by code or name.'
+                  : 'Your department is assigned by your account.',
+            ),
+            child: Text(
+              isDepartmentLoading
+                  ? 'Loading departments...'
+                  : _departmentLabel(selectedCode),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
       ],
     );
+  }
+
+  String _departmentLabel(String? code) {
+    if (code == null) return 'Select Department';
+    final department = departments.cast<Map<String, String>?>().firstWhere(
+      (item) => item?['Code'] == code,
+      orElse: () => null,
+    );
+    if (department == null) return code;
+    final description = department['Description'] ?? '';
+    return code == 'ALL' ? description : '$code - $description';
+  }
+
+  List<Map<String, String>> _filterDepartments(String query) {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty) return departments;
+    return departments.where((department) {
+      final code = (department['Code'] ?? '').toLowerCase();
+      final description = (department['Description'] ?? '').toLowerCase();
+      final descriptionAcronym = description
+          .split(RegExp(r'[^a-z0-9]+'))
+          .where((word) => word.isNotEmpty)
+          .map((word) => word[0])
+          .join();
+      return code.contains(normalizedQuery) ||
+          description.contains(normalizedQuery) ||
+          descriptionAcronym.contains(normalizedQuery);
+    }).toList();
+  }
+
+  Future<void> _showDepartmentPicker() async {
+    final searchController = TextEditingController();
+    var filteredDepartments = departments;
+
+    final selectedCode = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Select Department'),
+          content: SizedBox(
+            width: 600,
+            height: MediaQuery.sizeOf(context).height * 0.65,
+            child: Column(
+              children: [
+                TextField(
+                  controller: searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Search departments',
+                    hintText: 'Type code or description, for example ISP',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (query) => setDialogState(
+                    () => filteredDepartments = _filterDepartments(query),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: filteredDepartments.isEmpty
+                      ? const Center(child: Text('No departments found.'))
+                      : ListView.builder(
+                          itemCount: filteredDepartments.length,
+                          itemBuilder: (context, index) {
+                            final code =
+                                filteredDepartments[index]['Code'] ?? '';
+                            return ListTile(
+                              title: Text(_departmentLabel(code)),
+                              selected: code == selectedDepartmentCode,
+                              onTap: () => Navigator.pop(dialogContext, code),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    searchController.dispose();
+    if (selectedCode != null && mounted) {
+      setState(() => selectedDepartmentCode = selectedCode);
+    }
   }
 
   Widget _buildDropdown(

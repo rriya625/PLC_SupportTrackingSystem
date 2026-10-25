@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
+import 'package:ticket_tracker_app/utils/web_log_helper.dart';
 import 'package:flutter/foundation.dart';
 
 class ApiException implements Exception {
@@ -101,6 +102,9 @@ class APIHelper {
   ///
   /// Returns error message string if failed, or fetchUserInfo() result on success.
   static Future<dynamic> loginUser(String userId, String password) async {
+    // Debug logging is opt-in per authenticated account. Never carry a prior
+    // user's setting into a new login attempt.
+    Constants.debugMode = 'N';
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
 
@@ -173,6 +177,16 @@ class APIHelper {
 
     if (response.statusCode == 200) {
       final userData = jsonDecode(response.body);
+      // DEBUG_MODE is intentionally read first. Older services omit it and
+      // therefore remain safely defaulted to N.
+      Constants.debugMode = userData['DEBUG_MODE']?.toString() ?? 'N';
+      if (Constants.isDebugModeEnabled) {
+        await WebLogHelper.logApiResponse(
+          endpoint: 'GetUserInfo',
+          httpStatus: response.statusCode,
+          responseBody: response.body,
+        );
+      }
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
       Constants.userType =
@@ -316,6 +330,12 @@ class APIHelper {
           'Authorization': 'Bearer ${Constants.accessToken}',
           'Accept': 'application/json',
         },
+      );
+
+      await WebLogHelper.logApiResponse(
+        endpoint: 'GetTickets',
+        httpStatus: response.statusCode,
+        responseBody: response.body,
       );
 
       final jsonResponse = jsonDecode(response.body);
