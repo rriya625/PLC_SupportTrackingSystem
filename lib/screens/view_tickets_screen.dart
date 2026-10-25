@@ -858,29 +858,49 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     final selectedIsValid = departments.any(
       (department) => department['Code'] == selectedDepartmentCode,
     );
+    final selectedCode = selectedIsValid ? selectedDepartmentCode : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text('Department', style: TextStyle(fontWeight: FontWeight.w500)),
         const SizedBox(height: 4),
-        DropdownButtonFormField<String>(
-          value: selectedIsValid ? selectedDepartmentCode : null,
-          isExpanded: true,
-          decoration: const InputDecoration(
+        DropdownMenu<String>(
+          key: ValueKey(
+            'department-$selectedCode-${departments.length}-$isDepartmentLoading',
+          ),
+          initialSelection: selectedCode,
+          enabled: !isDepartmentLoading && Constants.isEmployee,
+          enableFilter: Constants.isEmployee,
+          enableSearch: Constants.isEmployee,
+          requestFocusOnTap: Constants.isEmployee,
+          expandedInsets: EdgeInsets.zero,
+          leadingIcon: Constants.isEmployee
+              ? const Icon(Icons.search)
+              : const Icon(Icons.lock_outline),
+          hintText: isDepartmentLoading
+              ? 'Loading departments...'
+              : 'Search by code or description',
+          helperText: Constants.isEmployee
+              ? 'Type a department code or name to filter the list.'
+              : 'Your department is assigned by your account.',
+          inputDecorationTheme: const InputDecorationTheme(
             border: OutlineInputBorder(),
             contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           ),
-          hint: Text(isDepartmentLoading ? 'Loading...' : 'Select Department'),
-          items: departments.map((department) {
+          dropdownMenuEntries: departments.map((department) {
             final code = department['Code'] ?? '';
             final description = department['Description'] ?? '';
-            final label = code.isEmpty ? description : '$code - $description';
-            return DropdownMenuItem(value: code, child: Text(label));
+            final label = code == 'ALL' ? description : '$code - $description';
+            return DropdownMenuEntry(value: code, label: label);
           }).toList(),
-          onChanged: isDepartmentLoading || !Constants.isEmployee
+          onSelected: isDepartmentLoading || !Constants.isEmployee
               ? null
-              : (value) => setState(() => selectedDepartmentCode = value),
+              : (value) {
+                  if (value != null) {
+                    setState(() => selectedDepartmentCode = value);
+                  }
+                },
         ),
       ],
     );
