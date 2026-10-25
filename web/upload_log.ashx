@@ -12,6 +12,7 @@ using System.Web.Script.Serialization;
 
 public class UploadLogHandler : IHttpHandler
 {
+    private static readonly object LogWriteLock = new object();
     public void ProcessRequest(HttpContext context)
     {
         context.Response.ContentEncoding = System.Text.Encoding.UTF8;
@@ -81,7 +82,8 @@ public class UploadLogHandler : IHttpHandler
             userID,
             message,
             Environment.NewLine);
-        File.AppendAllText(logPath, line);
+        lock (LogWriteLock)
+            File.AppendAllText(logPath, line, Encoding.UTF8);
 
         context.Response.ContentType = "application/json";
         context.Response.Write("{\"status\":\"ok\"}");
@@ -138,7 +140,8 @@ public class UploadLogHandler : IHttpHandler
         context.Response.ContentType = "application/zip";
         context.Response.AddHeader("Content-Disposition", "attachment; filename=\"" + zipName + "\"");
 
-        WriteZip(context.Response.OutputStream, files.OrderBy(path => path).ToArray());
+        lock (LogWriteLock)
+            WriteZip(context.Response.OutputStream, files.OrderBy(path => path).ToArray());
     }
 
     private static void ValidateDebugUser(HttpContext context)

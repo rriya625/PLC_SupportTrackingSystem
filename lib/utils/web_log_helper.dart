@@ -14,11 +14,16 @@ class WebLogHelper {
     if (url == null || url.isEmpty) return;
     await http.post(
       Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${Constants.accessToken}',
+      },
       body: jsonEncode({
         'timestamp': DateTime.now().toIso8601String(),
         'userID': Constants.userID.toString(),
-        'message': message,
+        'message': message.length > 250000
+            ? '${message.substring(0, 250000)}\n[LOG TRUNCATED]'
+            : message,
       }),
     );
   }

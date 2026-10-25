@@ -1,8 +1,8 @@
+import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 
@@ -287,7 +287,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
               onPressed: () async {
                 if (controller.text.trim().isEmpty) return;
                 try {
-                  final response = await http.post(
+                  final response = await diagnosticHttpClient.post(
                     Uri.parse('${Constants.baseUrlData}CreateActivity'),
                     headers: {
                       'Authorization': 'Bearer ${Constants.accessToken}',

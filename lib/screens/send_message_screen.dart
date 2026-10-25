@@ -1,7 +1,7 @@
+import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
@@ -69,7 +69,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     final url = Uri.parse(
       '${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}',
     );
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       url,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -178,7 +178,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       'UserName': _name,
     });
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       Uri.parse('${Constants.baseUrlData}SendMessage'),
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',

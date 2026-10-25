@@ -1,3 +1,4 @@
+import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -111,7 +112,7 @@ class APIHelper {
 
     final loginUri = Uri.parse('${Constants.baseUrlAuth}GetAccessToken');
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       loginUri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'UserID': int.parse(userId), 'Password': password}),
@@ -168,7 +169,7 @@ class APIHelper {
     final userInfoUri = Uri.parse(
       '${Constants.baseUrlData}GetUserInfo?UserID=${Constants.userID}',
     );
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       userInfoUri,
       headers: {
         'Content-Type': 'application/json',
@@ -181,13 +182,6 @@ class APIHelper {
       // DEBUG_MODE is intentionally read first. T enables diagnostics; older
       // services omit it and therefore remain safely defaulted to N.
       Constants.debugMode = userData['DEBUG_MODE']?.toString() ?? 'N';
-      if (Constants.isDebugModeEnabled) {
-        await WebLogHelper.logApiResponse(
-          endpoint: 'GetUserInfo',
-          httpStatus: response.statusCode,
-          responseBody: response.body,
-        );
-      }
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
       Constants.userType =
@@ -224,7 +218,7 @@ class APIHelper {
       'NewPassword': newPassword,
     });
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       uri,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -325,18 +319,12 @@ class APIHelper {
     ).replace(queryParameters: queryParameters);
 
     try {
-      final response = await http.get(
+      final response = await diagnosticHttpClient.get(
         uri,
         headers: {
           'Authorization': 'Bearer ${Constants.accessToken}',
           'Accept': 'application/json',
         },
-      );
-
-      await WebLogHelper.logApiResponse(
-        endpoint: 'GetTickets',
-        httpStatus: response.statusCode,
-        responseBody: response.body,
       );
 
       final jsonResponse = jsonDecode(response.body);
@@ -369,7 +357,7 @@ class APIHelper {
     debugPrint('Calling ticket details API.');
 
     try {
-      final response = await http.get(
+      final response = await diagnosticHttpClient.get(
         uri,
         headers: {
           'Authorization': 'Bearer ${Constants.accessToken}',
@@ -428,7 +416,7 @@ class APIHelper {
       'SharepointLink': SharepointLink,
     });
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       uri,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -484,7 +472,7 @@ class APIHelper {
 
     debugPrint('Uploading ${fileData.length} file(s).');
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       Uri.parse('${Constants.baseUrlData}UploadFiles'),
       headers: {
         'Content-Type': 'application/json',
@@ -529,7 +517,7 @@ class APIHelper {
       'FileList': fileData,
     };
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       Uri.parse('${Constants.baseUrlData}UploadFiles'),
       headers: {
         'Content-Type': 'application/json',
@@ -551,7 +539,7 @@ class APIHelper {
     String ticketKey,
   ) async {
     await ensureValidToken();
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       Uri.parse('${Constants.baseUrlData}DownloadFiles?TicketKey=$ticketKey'),
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -604,7 +592,7 @@ class APIHelper {
       '${Constants.baseUrlData}/DownloadFiles?TicketKey=$ticketKey&ProspectKey=${Constants.userID}',
     );
 
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       url,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -736,7 +724,7 @@ class APIHelper {
     };
 
     try {
-      final response = await http.get(url, headers: headers);
+      final response = await diagnosticHttpClient.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         final jsonBody = json.decode(response.body);
@@ -806,7 +794,7 @@ class APIHelper {
       '${Constants.baseUrlData}GetCodeList?CodeTable=$codeTable',
     );
 
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       url,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -842,7 +830,7 @@ class APIHelper {
       '&UseActiveOnly=$useActive',
     );
 
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       url,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -922,7 +910,7 @@ class APIHelper {
       '${Constants.baseUrlData}ExportTicketsCSV',
     ).replace(queryParameters: queryParameters);
 
-    return await http.get(
+    return await diagnosticHttpClient.get(
       uri,
       headers: {
         'Authorization': 'Bearer ${Constants.accessToken}',
@@ -954,7 +942,7 @@ class APIHelper {
 
     final body = jsonEncode(payload);
 
-    final response = await http.post(url, headers: headers, body: body);
+    final response = await diagnosticHttpClient.post(url, headers: headers, body: body);
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -968,7 +956,7 @@ class APIHelper {
   static Future<Map<String, List<Map<String, dynamic>>>>
   getActivityOptions() async {
     await ensureValidToken();
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       Uri.parse('${Constants.baseUrlData}GetActivityOptions'),
       headers: _authHeaders,
     );
@@ -1003,7 +991,7 @@ class APIHelper {
     required bool webPosting,
   }) async {
     await ensureValidToken();
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       Uri.parse('${Constants.baseUrlData}CreateEmployeeActivity'),
       headers: _authHeaders,
       body: jsonEncode({
@@ -1030,7 +1018,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}UpdateActivity'),
         headers: _authHeaders,
         body: jsonEncode({
@@ -1050,7 +1038,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}DeleteActivity'),
         headers: _authHeaders,
         body: jsonEncode({
@@ -1073,7 +1061,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     final decoded = _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}QueueActivityEmail'),
         headers: _authHeaders,
         body: jsonEncode({
@@ -1093,7 +1081,7 @@ class APIHelper {
 
   static Future<List<Map<String, dynamic>>> getEmployeeRecipients() async {
     await ensureValidToken();
-    final response = await http.get(
+    final response = await diagnosticHttpClient.get(
       Uri.parse('${Constants.baseUrlData}GetEmployeeRecipients'),
       headers: _authHeaders,
     );
@@ -1107,7 +1095,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}SendEmployeeMessage'),
         headers: _authHeaders,
         body: jsonEncode({
@@ -1127,7 +1115,7 @@ class APIHelper {
       '${Constants.baseUrlData}GetTicketDocuments',
     ).replace(queryParameters: {'TicketKey': '$ticketKey'});
     return _dataList(
-      _decodeResponse(await http.get(uri, headers: _authHeaders)),
+      _decodeResponse(await diagnosticHttpClient.get(uri, headers: _authHeaders)),
     );
   }
 
@@ -1147,7 +1135,7 @@ class APIHelper {
             'FileName': fileName,
           },
         );
-    final decoded = _decodeResponse(await http.get(uri, headers: _authHeaders));
+    final decoded = _decodeResponse(await diagnosticHttpClient.get(uri, headers: _authHeaders));
     final data = decoded is Map && decoded['Data'] is Map
         ? decoded['Data']
         : decoded;
@@ -1160,7 +1148,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}DeleteTicketAttachment'),
         headers: _authHeaders,
         body: jsonEncode({
@@ -1181,7 +1169,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
     _decodeResponse(
-      await http.post(
+      await diagnosticHttpClient.post(
         Uri.parse('${Constants.baseUrlData}UpdateTicketDescription'),
         headers: _authHeaders,
         body: jsonEncode({

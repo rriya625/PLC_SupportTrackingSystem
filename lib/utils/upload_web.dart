@@ -1,3 +1,4 @@
+import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 /// ⚠️ This file is for Flutter Web only.
 /// Do NOT import this file on iOS or Android.
 /// Use `kIsWeb` to conditionally call this code.
@@ -5,7 +6,6 @@
 import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -56,7 +56,7 @@ Future<void> pickAndUploadFilesWeb({
       final uri = Uri.parse('${Constants.baseUrlData}UploadFiles');
       print("📤 Uploading to: $uri");
 
-      final response = await http.post(
+      final response = await diagnosticHttpClient.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +186,7 @@ Future<void> uploadPickedFilesWeb(
       'FileList': files,
     };
 
-    final response = await http.post(
+    final response = await diagnosticHttpClient.post(
       uri,
       headers: {
         'Content-Type': 'application/json',

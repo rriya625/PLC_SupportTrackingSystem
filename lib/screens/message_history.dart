@@ -1,6 +1,6 @@
+import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart'; // Import the global spinner functions
 import 'package:ticket_tracker_app/screens/send_message_screen.dart';
@@ -35,7 +35,7 @@ class _MessageHistoryScreenState extends State<MessageHistoryScreen> {
       final url = Uri.parse('${Constants.baseUrlData}GetMessagesForTicket?TicketKey=$ticketNumber');
       debugPrint('Calling Message History API: $url');
 
-      final response = await http.get(
+      final response = await diagnosticHttpClient.get(
         url,
         headers: {
           'Authorization': 'Bearer ${Constants.accessToken}',
