@@ -15,6 +15,9 @@ class SendMessageScreen extends StatefulWidget {
 }
 
 class _SendMessageScreenState extends State<SendMessageScreen> {
+  static const String _urgentSupportReminder =
+      'For urgent issues, please call the Porter Lee support line at '
+      '(847) 985-2060. A portal message alone may not receive an immediate response.';
   final TextEditingController _messageController = TextEditingController();
   final FocusNode _messageFocusNode = FocusNode();
 
@@ -25,6 +28,15 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   List<Map<String, dynamic>> _employeeRecipients = [];
   String? _selectedEmployeeId;
   bool _sendToEmployee = false;
+
+  bool get _isUrgentSelection =>
+      !_sendToEmployee &&
+      (_selectedMessageTo ?? '').toLowerCase().contains('urgent');
+
+  Future<void> _showUrgentSupportReminder() async {
+    if (!mounted) return;
+    await showMessageDialog(context, _urgentSupportReminder);
+  }
 
   @override
   void initState() {
@@ -151,10 +163,17 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       return;
     }
 
+    final submittedBy = _name.trim().isNotEmpty
+        ? _name.trim()
+        : 'Portal user ${Constants.userID}';
+    final messageBody = Constants.isEmployee
+        ? message
+        : '$message\n\nSubmitted by: $submittedBy';
+
     final body = json.encode({
       'TicketKey': int.parse(_ticketKey!),
       'MessageTo': _selectedMessageTo,
-      'sMessage': message,
+      'sMessage': messageBody,
       'UserID': Constants.userID.toString(),
       'UserName': _name,
     });
@@ -287,6 +306,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                       setState(() {
                         _selectedMessageTo = value;
                       });
+                      if ((value ?? '').toLowerCase().contains('urgent')) {
+                        _showUrgentSupportReminder();
+                      }
                     },
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -296,6 +318,10 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                       ),
                     ),
                   ),
+                if (_isUrgentSelection) ...[
+                  const SizedBox(height: 12),
+                  _UrgentSupportNotice(message: _urgentSupportReminder),
+                ],
                 const SizedBox(height: 24),
                 const Text(
                   'Enter your message here:',
@@ -360,6 +386,38 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UrgentSupportNotice extends StatelessWidget {
+  final String message;
+
+  const _UrgentSupportNotice({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade100,
+        border: Border.all(color: Colors.orange.shade700),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.phone_in_talk, color: Colors.orange.shade900),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }

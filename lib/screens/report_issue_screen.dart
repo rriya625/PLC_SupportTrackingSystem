@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
+import 'package:ticket_tracker_app/utils/dialogs.dart';
 
 /// Report Issue screen for creating a new support ticket.
 class ReportIssueScreen extends StatefulWidget {
@@ -19,6 +20,9 @@ class ReportIssueScreen extends StatefulWidget {
 }
 
 class _ReportIssueScreenState extends State<ReportIssueScreen> {
+  static const String _urgentSupportReminder =
+      'Priority 1 is for urgent issues. Please call the Porter Lee support '
+      'line at (847) 985-2060 after submitting so the support team can respond promptly.';
   List<String> _priorityOptions = [];
   List<Map<String, dynamic>> _pendingWebFiles = [];
   String _selectedPriority = 'Normal';
@@ -37,6 +41,15 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
 
   String? shortDescError;
   String? detailedDescError;
+
+  bool get _isPriorityOne =>
+      _selectedPriority.trim().startsWith('1 -') ||
+      _selectedPriority.trim() == '1';
+
+  Future<void> _showPriorityOneReminder() async {
+    if (!mounted) return;
+    await showMessageDialog(context, _urgentSupportReminder);
+  }
 
   Future<void> _pickImageFromCamera() async {
     try {
@@ -228,9 +241,39 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   value: _selectedPriority,
                   items: _priorityOptions,
                   onChanged: (val) {
-                    if (val != null) setState(() => _selectedPriority = val);
+                    if (val == null) return;
+                    setState(() => _selectedPriority = val);
+                    if (_isPriorityOne) _showPriorityOneReminder();
                   },
                 ),
+                if (_isPriorityOne) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      border: Border.all(color: Colors.orange.shade700),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.phone_in_talk,
+                          color: Colors.orange.shade900,
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            _urgentSupportReminder,
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 const SizedBox(height: 16),
                 _buildTextField(
