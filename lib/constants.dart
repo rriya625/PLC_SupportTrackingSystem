@@ -59,7 +59,8 @@ class Constants {
   static bool get isDev => buildEnv.toLowerCase() == 'dev';
   static bool get isProd => buildEnv.toLowerCase() == 'prod';
   static bool get isEmployee => userType.trim().toUpperCase() == 'EMPLOYEE';
-  static bool get isDebugModeEnabled => debugMode.trim().toUpperCase() == 'T';
+  static bool get isDebugModeEnabled =>
+      const ['T', 'Y'].contains(debugMode.trim().toUpperCase());
 
   /// Normalize a base URL so it always ends with `/`
   static String _normalizeUrl(String url) {

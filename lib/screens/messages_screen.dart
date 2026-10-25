@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/messages_api.dart';
 import 'ticket_description_screen.dart';
@@ -60,7 +61,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       );
       if (!mounted) return;
       setState(() => row['Unread'] = false);
-      final removed = await Navigator.push<bool>(
+      await Navigator.push<bool>(
         context,
         MaterialPageRoute(
           builder: (_) => _MessageDetail(
@@ -69,7 +70,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ),
         ),
       );
-      if (mounted && removed == true) setState(() => rows.remove(row));
+      if (mounted) await load();
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -82,6 +83,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       title: const Text('Messages'),
+      backgroundColor: Colors.blue[800],
+      foregroundColor: Colors.white,
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -91,10 +94,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => MessageComposeScreen(api: api)),
-      ),
+      onPressed: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => MessageComposeScreen(api: api)),
+        );
+        if (mounted) await load();
+      },
       icon: const Icon(Icons.add),
       label: const Text('New message'),
     ),
@@ -208,7 +214,11 @@ class _MessageDetailState extends State<_MessageDetail> {
   Widget build(BuildContext context) {
     final m = widget.message;
     return Scaffold(
-      appBar: AppBar(title: const Text('Message')),
+      appBar: AppBar(
+        title: const Text('Message Details'),
+        backgroundColor: Colors.blue[800],
+        foregroundColor: Colors.white,
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 900),
@@ -246,8 +256,8 @@ class _MessageDetailState extends State<_MessageDetail> {
                   if (_number(m['TicketKey']) > 0)
                     OutlinedButton.icon(
                       onPressed: () async {
-                        // Replace only the message detail, preserving the existing inbox and scroll position.
-                        Navigator.pushReplacement(
+                        // Return through the detail route so the inbox refresh waits for ticket closure.
+                        await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) =>
@@ -257,6 +267,7 @@ class _MessageDetailState extends State<_MessageDetail> {
                             ),
                           ),
                         );
+                        if (mounted) Navigator.pop(context);
                       },
                       icon: const Icon(Icons.confirmation_number_outlined),
                       label: Text('Open ticket #${m['TicketKey']}'),
@@ -286,6 +297,7 @@ class MessageComposeScreen extends StatefulWidget {
 }
 
 class _MessageComposeScreenState extends State<MessageComposeScreen> {
+  Timer? recipientDebounce;
   final text = TextEditingController(),
       ticket = TextEditingController(),
       search = TextEditingController();
@@ -297,11 +309,25 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
   @override
   void initState() {
     super.initState();
+    search.addListener(() {
+      if (kind != 'CUSTOMER') return;
+      recipientDebounce?.cancel();
+      recipientDebounce = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted || kind != 'CUSTOMER') return;
+        if (recipient != null &&
+            options.any(
+              (o) => o['ID'] == recipient && o['Name'] == search.text,
+            ))
+          return;
+        find();
+      });
+    });
     if (widget.reply == null) loadGroups();
   }
 
   @override
   void dispose() {
+    recipientDebounce?.cancel();
     text.dispose();
     ticket.dispose();
     search.dispose();
@@ -316,7 +342,7 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
       if (!mounted || generation != searchGeneration) return;
       setState(() {
         options = groups.map((s) => {'ID': s, 'Name': s}).toList();
-        recipient = null;
+        recipient = options.isEmpty ? null : options.first['ID'];
       });
     } catch (e) {
       if (mounted && generation == searchGeneration)
@@ -333,7 +359,6 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
       searching = true;
       error = null;
       recipient = null;
-      options = [];
     });
     try {
       final result = await widget.api.call(
@@ -401,10 +426,14 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.reply == null ? 'New message' : 'Reply')),
+    appBar: AppBar(
+      title: Text(widget.reply == null ? 'Send Message' : 'Reply to Message'),
+      backgroundColor: Colors.blue[800],
+      foregroundColor: Colors.white,
+    ),
     body: Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 800),
+        constraints: const BoxConstraints(maxWidth: 600),
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -413,72 +442,64 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
                 'Reply to: ${widget.reply!['MsgFrom']} ${_ticketLabel(widget.reply!)}',
               ),
             if (widget.reply == null) ...[
+              const Text('Agency: Porter Lee'),
+              const SizedBox(height: 12),
+              Text('Name: ${Constants.contactName}'),
+              const SizedBox(height: 24),
+              const Text('Send your message to:'),
               if (Constants.isEmployee)
-                DropdownButtonFormField<String>(
-                  value: kind,
-                  decoration: const InputDecoration(
-                    labelText: 'Recipient type',
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'GROUP',
-                      child: Text('Support group'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'EMPLOYEE',
-                      child: Text('Employee'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'CUSTOMER',
-                      child: Text('Customer'),
-                    ),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'GROUP', label: Text('Group')),
+                    ButtonSegment(value: 'EMPLOYEE', label: Text('Employee')),
+                    ButtonSegment(value: 'CUSTOMER', label: Text('Customer')),
                   ],
-                  onChanged: busy
+                  selected: {kind},
+                  onSelectionChanged: busy
                       ? null
-                      : (value) {
-                          searchGeneration++;
+                      : (values) {
                           setState(() {
-                            kind = value!;
+                            kind = values.first;
                             recipient = null;
                             options = [];
-                            searching = false;
                             error = null;
+                            search.clear();
                           });
-                          if (kind == 'GROUP') loadGroups();
+                          if (kind == 'GROUP') {
+                            loadGroups();
+                          } else {
+                            find();
+                          }
                         },
                 ),
-              if (kind != 'GROUP') ...[
-                TextField(
-                  controller: search,
-                  decoration: const InputDecoration(
-                    labelText: 'Search name or ID (at least 2 characters)',
-                  ),
-                  onSubmitted: (_) => find(),
-                ),
-                TextButton(
-                  onPressed: searching ? null : find,
-                  child: const Text('Find recipients'),
-                ),
-              ],
+              const SizedBox(height: 12),
               if (searching) const LinearProgressIndicator(),
-              DropdownButtonFormField<String>(
-                key: ValueKey('$kind-${options.map((e) => e['ID']).join(',')}'),
-                value: recipient,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'To'),
-                items: options
-                    .map(
-                      (o) => DropdownMenuItem(
-                        value: o['ID'],
-                        child: Text(
-                          '${o['Name']}',
-                          overflow: TextOverflow.ellipsis,
+              LayoutBuilder(
+                builder: (context, constraints) => DropdownMenu<String>(
+                  key: ValueKey(kind),
+                  controller: kind == 'CUSTOMER' ? search : null,
+                  width: constraints.maxWidth,
+                  initialSelection: recipient,
+                  enabled: !busy,
+                  enableFilter: kind != 'CUSTOMER',
+                  enableSearch: true,
+                  requestFocusOnTap: true,
+                  label: const Text('To'),
+                  helperText: kind == 'CUSTOMER'
+                      ? 'Type to search customers by name, ID or department.'
+                      : null,
+                  dropdownMenuEntries: options
+                      .map(
+                        (o) => DropdownMenuEntry(
+                          value: o['ID']!,
+                          label: o['Name']!,
                         ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: busy ? null : (v) => setState(() => recipient = v),
+                      )
+                      .toList(),
+                  onSelected: (v) => setState(() => recipient = v),
+                ),
               ),
+              const SizedBox(height: 16),
               TextField(
                 controller: ticket,
                 keyboardType: TextInputType.number,
@@ -490,21 +511,45 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: text,
-              minLines: 6,
+              autofocus: true,
+              minLines: 10,
               maxLines: 12,
               maxLength: 4000,
               decoration: const InputDecoration(
-                labelText: 'Message',
+                labelText: 'Enter your message here',
+                alignLabelWithHint: true,
                 border: OutlineInputBorder(),
               ),
             ),
             if (error != null)
               Text(error!, style: const TextStyle(color: Colors.red)),
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: busy || searching ? null : send,
-              icon: const Icon(Icons.send),
-              label: Text(busy ? 'Sending…' : 'Send'),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: busy ? null : () => Navigator.pop(context),
+                    icon: const Icon(Icons.cancel),
+                    label: const Text('Cancel'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: busy || searching ? null : send,
+                    icon: const Icon(Icons.send),
+                    label: Text(busy ? 'Sending…' : 'Submit'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.lightBlueAccent,
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

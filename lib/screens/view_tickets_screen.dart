@@ -325,6 +325,20 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
       });
 
       Navigator.of(context, rootNavigator: true).pop();
+      if (mounted &&
+          searchBy == 'Ticket #' &&
+          searchController.text.trim().isNotEmpty &&
+          data.length == 1) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const TicketDescriptionScreenStateful(),
+            settings: RouteSettings(
+              arguments: data.single['TicketKey'].toString(),
+            ),
+          ),
+        );
+      }
     } catch (e) {
       Navigator.of(context, rootNavigator: true).pop();
       setState(() {

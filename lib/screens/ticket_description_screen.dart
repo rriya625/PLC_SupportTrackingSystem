@@ -1,3 +1,4 @@
+import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/screens/view_activity.dart';
 import 'package:ticket_tracker_app/screens/message_history.dart';
 import 'send_message_screen.dart';
@@ -38,6 +39,8 @@ class _TicketDescriptionScreenState
   String customerReference = '';
   String sharepointLink = '';
   String sendConfirmationTo = '';
+  String creatorEmail = '';
+  String customerAcronym = '';
   String _originalShortDescription = '';
   String _originalRawLongDescription = '';
   bool _canEditDescription = false;
@@ -67,12 +70,12 @@ class _TicketDescriptionScreenState
             _originalShortDescription = data['ShortDesc']?.toString() ?? '';
             _originalRawLongDescription =
                 (data['RawLongDesc'] ?? data['LongDesc'])?.toString() ?? '';
-            _canEditDescription =
-                data['CanEditDescription'] == true ||
-                data['CanEditDescription']?.toString().toUpperCase() == 'Y';
+            _canEditDescription = portalFlag(data['CanEditDescription']);
             customerReference = data['CustomerReference'] ?? '';
             sharepointLink = data['SharepointLink'] ?? '';
             sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
+            creatorEmail = data['CreatorEmail']?.toString() ?? '';
+            customerAcronym = data['CustomerAcronym']?.toString() ?? '';
           });
         } else if (mounted) {
           setState(() {
@@ -117,12 +120,17 @@ class _TicketDescriptionScreenState
       appBar: AppBar(
         actions: Constants.isEmployee
             ? [
-                if (_canEditDescription)
-                  IconButton(
-                    tooltip: 'Edit ticket description',
-                    onPressed: _editTicketDescription,
-                    icon: const Icon(Icons.edit_note),
+                IconButton(
+                  tooltip: 'Update Ticket',
+                  onPressed: () => _showUpdateTicketDialog(
+                    context,
+                    int.tryParse(ticketKey) ?? 0,
+                    customerReference,
+                    sharepointLink,
+                    sendConfirmationTo,
                   ),
+                  icon: const Icon(Icons.edit_note),
+                ),
                 IconButton(
                   tooltip: 'Ticket documents',
                   onPressed: _showTicketDocuments,
@@ -310,193 +318,7 @@ class _TicketDescriptionScreenState
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () async {
-                          try {
-                            final key =
-                                (ticketNumber.isNotEmpty
-                                        ? ticketNumber
-                                        : ticketKey)
-                                    .trim();
-                            if (key.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Ticket key is missing'),
-                                ),
-                              );
-                              return;
-                            }
-
-                            // Show loading dialog before API call
-                            showUploadSpinner('Loading Customer Documents...');
-
-                            // Await API call to get file list
-                            final files = await APIHelper.getCustomerDocsList(
-                              key,
-                            );
-
-                            // Dismiss loading dialog after API response
-                            if (mounted) {
-                              hideUploadSpinner();
-                            }
-
-                            if (!mounted) return;
-
-                            showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  backgroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    side: const BorderSide(
-                                      color: Colors.black,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  titlePadding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    16,
-                                    16,
-                                    0,
-                                  ),
-                                  contentPadding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    8,
-                                    16,
-                                    0,
-                                  ),
-                                  actionsPadding: const EdgeInsets.fromLTRB(
-                                    12,
-                                    8,
-                                    12,
-                                    12,
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.insert_drive_file,
-                                        color: Colors.blue[800],
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Documents',
-                                        style: TextStyle(
-                                          color: Colors.blue[800],
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  content: SizedBox(
-                                    width: double.maxFinite,
-                                    child: files.isEmpty
-                                        ? const Text(
-                                            'No files found.',
-                                            style: TextStyle(fontSize: 14),
-                                          )
-                                        : ListView.builder(
-                                            shrinkWrap: true,
-                                            itemCount: files.length,
-                                            itemBuilder: (context, index) {
-                                              final file = files[index];
-                                              return Padding(
-                                                padding: const EdgeInsets.only(
-                                                  bottom: 12.0,
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      'File ${index + 1}: ${file['date'] ?? ''}',
-                                                      style: const TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    Text(
-                                                      file['fileName'] ?? '',
-                                                      style: const TextStyle(
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    const Divider(
-                                                      height: 1,
-                                                      color: Colors.black12,
-                                                    ),
-                                                  ],
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.black,
-                                        backgroundColor: Colors.lightBlueAccent,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 10,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('Close'),
-                                    ),
-                                    TextButton(
-                                      style: TextButton.styleFrom(
-                                        foregroundColor: Colors.black,
-                                        backgroundColor: Colors.lightBlueAccent,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 10,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      onPressed: () async {
-                                        Navigator.of(
-                                          context,
-                                        ).pop(); // Close the current dialog first
-                                        final parentContext = this.context;
-                                        await _showImagePreviewDialogOnly(
-                                          parentContext,
-                                          ticketKey,
-                                        ); // Show the image preview popup
-                                      },
-                                      child: const Text(
-                                        'View/Download Documents',
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          } catch (e) {
-                            if (mounted) {
-                              hideUploadSpinner();
-                            }
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Error loading file names: $e'),
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: _showTicketDocuments,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.lightBlueAccent,
                           foregroundColor: Colors.black,
@@ -599,7 +421,8 @@ class _TicketDescriptionScreenState
                               builder: (context) => ViewActivityScreen(
                                 ticketNumber: ticketNumber,
                                 shortDescription: shortDescription,
-                                confirmationEmailTo: sendConfirmationTo,
+                                confirmationEmailTo: creatorEmail,
+                                customerAcronym: customerAcronym,
                               ),
                               settings: RouteSettings(arguments: ticketNumber),
                             ),
@@ -630,113 +453,12 @@ class _TicketDescriptionScreenState
     );
   }
 
-  Future<void> _editTicketDescription() async {
-    final shortController = TextEditingController(text: shortDescription);
-    final longController = TextEditingController(text: longDescription);
-    final draft = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Correct Ticket Description'),
-        content: SizedBox(
-          width: 560,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Saving replaces any legacy rich-text formatting with plain text.',
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: shortController,
-                  maxLength: 250,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: longController,
-                  maxLines: 12,
-                  decoration: const InputDecoration(
-                    labelText: 'Details',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, {
-              'short': shortController.text.trim(),
-              'long': longController.text.trim(),
-            }),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-    shortController.dispose();
-    longController.dispose();
-    if (draft == null || draft['short']!.isEmpty || draft['long']!.isEmpty) {
-      return;
-    }
-    try {
-      await APIHelper.updateTicketDescription(
-        ticketKey: int.parse(ticketKey),
-        shortDesc: draft['short']!,
-        longDesc: draft['long']!,
-        expectedShortDesc: _originalShortDescription,
-        expectedLongDesc: _originalRawLongDescription,
-      );
-      final updated = await APIHelper.fetchTicketDetails(ticketKey);
-      if (updated == null || !mounted) return;
-      setState(() {
-        shortDescription = updated['ShortDesc']?.toString() ?? '';
-        _originalShortDescription = shortDescription;
-        _originalRawLongDescription =
-            (updated['RawLongDesc'] ?? updated['LongDesc'])?.toString() ?? '';
-        longDescription = _parseRtf(updated['LongDesc']?.toString() ?? '');
-        _canEditDescription =
-            updated['CanEditDescription'] == true ||
-            updated['CanEditDescription']?.toString().toUpperCase() == 'Y';
-      });
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      if (error.statusCode == 409) {
-        await showMessageDialog(
-          context,
-          'This ticket changed after you opened it. Your draft was not submitted. '
-          'The latest ticket will now be loaded so you can compare it.',
-        );
-        final updated = await APIHelper.fetchTicketDetails(ticketKey);
-        if (updated != null && mounted) {
-          setState(() {
-            shortDescription = updated['ShortDesc']?.toString() ?? '';
-            _originalShortDescription = shortDescription;
-            _originalRawLongDescription =
-                (updated['RawLongDesc'] ?? updated['LongDesc'])?.toString() ??
-                '';
-            longDescription = _parseRtf(updated['LongDesc']?.toString() ?? '');
-          });
-        }
-      } else {
-        await showMessageDialog(context, error.message);
-      }
-    }
-  }
-
   Future<void> _showTicketDocuments() async {
     try {
+      List<String> warnings = [];
       final documents = await APIHelper.getTicketDocuments(
         int.parse(ticketKey),
+        onWarnings: (value) => warnings = value,
       );
       if (!mounted) return;
       await showDialog<void>(
@@ -752,14 +474,31 @@ class _TicketDescriptionScreenState
             grouped.putIfAbsent(source, () => []).add(document);
           }
           return AlertDialog(
-            title: const Text('Ticket Documents'),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: Colors.black),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.insert_drive_file, color: Colors.blue[800]),
+                const SizedBox(width: 8),
+                const Text('Documents'),
+              ],
+            ),
             content: SizedBox(
               width: 680,
               height: 520,
               child: ListView(
                 children: [
+                  for (final warning in warnings)
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(warning),
+                    ),
                   _documentSection('Customer uploads', grouped['CUSTOMER']!),
-                  _documentSection('Design documents', grouped['DESIGN']!),
+                  if (Constants.isEmployee)
+                    _documentSection('Design documents', grouped['DESIGN']!),
                   _documentSection(
                     'Activity files (grouped by activity number)',
                     grouped['ACTIVITY']!,
@@ -799,9 +538,7 @@ class _TicketDescriptionScreenState
               final history =
                   int.tryParse(document['HistoryNumber']?.toString() ?? '') ??
                   0;
-              final canDelete =
-                  document['CanDelete'] == true ||
-                  document['CanDelete']?.toString().toUpperCase() == 'Y';
+              final canDelete = portalFlag(document['CanDelete']);
               return ListTile(
                 title: Text(fileName),
                 subtitle: source == 'ACTIVITY'
@@ -1416,6 +1153,9 @@ class _TicketDescriptionScreenState
   ) async {
     final parentContext = context; // ✅ Save parent context
 
+    final shortEdit = TextEditingController(text: shortDescription);
+    final longEdit = TextEditingController(text: longDescription);
+    bool saving = false;
     // Controllers
     final customerRefController = TextEditingController(
       text: currentCustomerRef,
@@ -1441,6 +1181,28 @@ class _TicketDescriptionScreenState
         Widget dialogContent = Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_canEditDescription) ...[
+              TextField(
+                controller: shortEdit,
+                maxLength: 250,
+                decoration: const InputDecoration(
+                  labelText: 'Description',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: longEdit,
+                minLines: 5,
+                maxLines: 10,
+                decoration: const InputDecoration(
+                  labelText: 'Details',
+                  border: OutlineInputBorder(),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextField(
               controller: customerRefController,
               focusNode: customerRefFocusNode, // ✅ Attach focus node
@@ -1484,6 +1246,7 @@ class _TicketDescriptionScreenState
                 foregroundColor: Colors.white,
               ),
               onPressed: () async {
+                if (saving) return;
                 final updatedCustomerRef = customerRefController.text.trim();
                 final updatedSharepointLink = sharepointLinkController.text
                     .trim();
@@ -1492,6 +1255,22 @@ class _TicketDescriptionScreenState
                     .trim();
 
                 try {
+                  saving = true;
+                  if (_canEditDescription &&
+                      (shortEdit.text.trim() != shortDescription ||
+                          longEdit.text.trim() != longDescription)) {
+                    await APIHelper.updateTicketDescription(
+                      ticketKey: ticketKey,
+                      shortDesc: shortEdit.text.trim(),
+                      longDesc: longEdit.text.trim(),
+                      expectedShortDesc: _originalShortDescription,
+                      expectedLongDesc: _originalRawLongDescription,
+                    );
+                    _originalShortDescription = shortEdit.text.trim();
+                    _originalRawLongDescription = longEdit.text.trim();
+                    shortDescription = shortEdit.text.trim();
+                    longDescription = longEdit.text.trim();
+                  }
                   final result = await APIHelper.updateTicket(
                     ticketKey,
                     updatedCustomerRef,
@@ -1534,7 +1313,12 @@ class _TicketDescriptionScreenState
                     );
                   }
                 } catch (e) {
-                  await showMessageDialog(parentContext, 'Error: $e');
+                  await showMessageDialog(
+                    parentContext,
+                    'Unable to complete all changes: $e. Any description already saved is retained; you can retry the remaining fields.',
+                  );
+                } finally {
+                  saving = false;
                 }
               },
               child: const Text('Submit'),
@@ -1545,6 +1329,8 @@ class _TicketDescriptionScreenState
     );
 
     // ✅ Clean up controllers & focus node after dialog closes
+    shortEdit.dispose();
+    longEdit.dispose();
     customerRefController.dispose();
     sharepointLinkController.dispose();
     sendConfirmationController.dispose();

@@ -1,3 +1,6 @@
+import 'package:ticket_tracker_app/utils/document_download_helper.dart';
+import 'package:ticket_tracker_app/utils/activity_fields.dart';
+import 'package:ticket_tracker_app/utils/ticket_email.dart';
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -10,12 +13,18 @@ class ViewActivityScreen extends StatefulWidget {
   final String ticketNumber;
   final String shortDescription;
   final String confirmationEmailTo;
+  final String customerAcronym;
+  final Future<List<Map<String, dynamic>>> Function(String)? activityLoader;
+  final Future<List<Map<String, dynamic>>> Function(int)? documentLoader;
 
   const ViewActivityScreen({
     super.key,
     required this.ticketNumber,
     required this.shortDescription,
     this.confirmationEmailTo = '',
+    this.customerAcronym = '',
+    this.activityLoader,
+    this.documentLoader,
   });
 
   @override
@@ -26,6 +35,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   List<Map<String, dynamic>> activityData = [];
   Map<String, List<Map<String, dynamic>>> activityOptions = const {};
   bool loading = true;
+  List<Map<String, dynamic>> documents = [];
 
   int get _ticketKey => int.tryParse(widget.ticketNumber) ?? 0;
 
@@ -39,11 +49,23 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     if (mounted) setState(() => loading = true);
     try {
       final results = await Future.wait<dynamic>([
-        APIHelper.getActivityMessages(widget.ticketNumber),
+        (widget.activityLoader ?? APIHelper.getActivityMessages)(
+          widget.ticketNumber,
+        ),
         if (Constants.isEmployee) APIHelper.getActivityOptions(),
       ]);
+      List<Map<String, dynamic>> loadedDocuments = [];
+      try {
+        loadedDocuments =
+            await (widget.documentLoader ?? APIHelper.getTicketDocuments)(
+              _ticketKey,
+            );
+      } catch (error) {
+        if (mounted) _showError(error);
+      }
       if (!mounted) return;
       setState(() {
+        documents = loadedDocuments;
         activityData = results.first as List<Map<String, dynamic>>;
         if (Constants.isEmployee && results.length > 1) {
           activityOptions =
@@ -57,6 +79,92 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _documentsFor(int number) => documents
+      .where(
+        (d) =>
+            d['Source'] == 'ACTIVITY' &&
+            int.tryParse(d['HistoryNumber'].toString()) == number,
+      )
+      .toList();
+
+  Future<void> _showDocuments(int number) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: Text('Activity #$number documents'),
+        content: SizedBox(
+          width: 600,
+          height: 360,
+          child: ListView(
+            children: _documentsFor(number)
+                .map(
+                  (d) => ListTile(
+                    leading: const Icon(Icons.insert_drive_file_outlined),
+                    title: Text(d['FileName'].toString()),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => _openDocument(d),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openDocument(Map<String, dynamic> document) async {
+    try {
+      final data = await APIHelper.downloadTicketDocument(
+        ticketKey: _ticketKey,
+        historyNumber: int.parse(document['HistoryNumber'].toString()),
+        source: 'ACTIVITY',
+        fileName: document['FileName'].toString(),
+      );
+      final bytes = base64Decode(data['Base64Content'].toString());
+      final name = data['FileName'].toString();
+      if (!mounted) return;
+      if (RegExp(
+        r'\.(png|jpe?g|gif|webp|bmp)$',
+        caseSensitive: false,
+      ).hasMatch(name)) {
+        await showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: Text(name),
+            content: SizedBox(
+              width: 700,
+              height: 500,
+              child: InteractiveViewer(
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        final message = await saveDownloadedDocument(bytes, name);
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
   String _value(Map<String, dynamic> item, List<String> keys) {
     for (final key in keys) {
       final value = item[key];
@@ -65,19 +173,12 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     return '';
   }
 
-  bool _flag(Map<String, dynamic> item, String key) {
-    final value = item[key];
-    return value == true || value?.toString().toUpperCase() == 'Y';
-  }
+  bool _flag(Map<String, dynamic> item, String key) => portalFlag(item[key]);
 
   String _rawDescription(Map<String, dynamic> item) =>
       _value(item, const ['RawLongDesc', 'LongDesc']);
 
-  int _historyNumber(Map<String, dynamic> item) =>
-      int.tryParse(
-        _value(item, const ['HistoryNumber', 'History Number', 'HistoryNo']),
-      ) ??
-      0;
+  int _historyNumber(Map<String, dynamic> item) => activityNumber(item);
 
   String _code(Map<String, dynamic> option) =>
       _value(option, const ['Code', 'code']);
@@ -298,7 +399,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                       'ProspectKey': Constants.userID,
                       'LongDesc': controller.text.trim(),
                       'Priority': '5',
-                      'Critical': critical ? 'Y' : 'N',
+                      'Critical': critical ? 'T' : 'F',
                     }),
                   );
                   if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -424,25 +525,34 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   Future<void> _sendEmail(Map<String, dynamic> item) async {
     final to = TextEditingController(text: widget.confirmationEmailTo);
     final subject = TextEditingController(
-      text: 'PLC Support Ticket #${widget.ticketNumber}',
+      text: ticketEmailSubject(
+        widget.customerAcronym,
+        widget.ticketNumber,
+        widget.shortDescription,
+      ),
     );
     final body = TextEditingController(text: _value(item, const ['LongDesc']));
     final payload = await showDialog<Map<String, String>>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('Email activity #${_historyNumber(item)}'),
+        title: Text('Send Email — Activity #${_historyNumber(item)}'),
+        backgroundColor: Colors.white,
         content: SizedBox(
           width: 560,
           child: SingleChildScrollView(
             child: Column(
               children: [
                 const Text(
-                  'Review the plain-text email. Saving an activity never sends it automatically.',
+                  'Review the recipient and message, then select Send to queue the email.',
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: to,
-                  decoration: const InputDecoration(labelText: 'To'),
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'To',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 TextField(
                   controller: subject,
@@ -451,7 +561,11 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                 TextField(
                   controller: body,
                   maxLines: 10,
-                  decoration: const InputDecoration(labelText: 'Body'),
+                  decoration: const InputDecoration(
+                    labelText: 'Message',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
                 ),
               ],
             ),
@@ -500,7 +614,9 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            status == 'QUEUED' ? 'Email queued' : 'Email request accepted',
+            status == 'QUEUED'
+                ? 'Message is queued to send.'
+                : 'Email request accepted',
           ),
         ),
       );
@@ -564,30 +680,38 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                             ),
                             if (Constants.isEmployee)
                               Text(
-                                'Visibility: ${_value(item, const ['WebPosting']) == 'Y' ? 'Customer visible' : 'Internal'}',
+                                'Visibility: ${portalFlag(item['WebPosting']) ? 'Customer visible' : 'Internal'}',
                               ),
                             const SizedBox(height: 8),
                             SelectableText(_value(item, const ['LongDesc'])),
+                            if (_documentsFor(number).isNotEmpty)
+                              IconButton(
+                                tooltip: 'Activity documents',
+                                icon: const Icon(Icons.photo_library_outlined),
+                                onPressed: () => _showDocuments(number),
+                              ),
                             if (Constants.isEmployee)
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: Wrap(
                                   spacing: 8,
                                   children: [
-                                    if (_flag(item, 'CanEdit'))
+                                    if (number > 0 && _flag(item, 'CanEdit'))
                                       TextButton.icon(
                                         onPressed: () => _editActivity(item),
                                         icon: const Icon(Icons.edit),
                                         label: const Text('Edit'),
                                       ),
-                                    if (_flag(item, 'CanDelete'))
+                                    if (number > 0 && _flag(item, 'CanDelete'))
                                       TextButton.icon(
                                         onPressed: () => _deleteActivity(item),
                                         icon: const Icon(Icons.delete_outline),
                                         label: const Text('Delete'),
                                       ),
                                     TextButton.icon(
-                                      onPressed: () => _sendEmail(item),
+                                      onPressed: number > 0
+                                          ? () => _sendEmail(item)
+                                          : null,
                                       icon: const Icon(Icons.email_outlined),
                                       label: const Text('Send email'),
                                     ),

@@ -822,7 +822,7 @@ class APIHelper {
   }) async {
     await ensureValidToken();
 
-    final useActive = useActiveOnly ? 'Y' : 'N';
+    final useActive = useActiveOnly ? 'T' : 'N';
     final url = Uri.parse(
       '${Constants.baseUrlData}GetTicketGroup'
       '?ProspectKey=$prospectKey'
@@ -942,7 +942,11 @@ class APIHelper {
 
     final body = jsonEncode(payload);
 
-    final response = await diagnosticHttpClient.post(url, headers: headers, body: body);
+    final response = await diagnosticHttpClient.post(
+      url,
+      headers: headers,
+      body: body,
+    );
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
@@ -1001,7 +1005,7 @@ class APIHelper {
         'Status': status,
         'Priority': priority,
         'Critical': critical ? 'T' : 'F',
-        'WebPosting': webPosting ? 'Y' : 'N',
+        'WebPosting': webPosting ? 'T' : 'N',
       }),
     );
     final decoded = _decodeResponse(response);
@@ -1108,15 +1112,20 @@ class APIHelper {
   }
 
   static Future<List<Map<String, dynamic>>> getTicketDocuments(
-    int ticketKey,
-  ) async {
+    int ticketKey, {
+    void Function(List<String>)? onWarnings,
+  }) async {
     await ensureValidToken();
     final uri = Uri.parse(
       '${Constants.baseUrlData}GetTicketDocuments',
     ).replace(queryParameters: {'TicketKey': '$ticketKey'});
-    return _dataList(
-      _decodeResponse(await diagnosticHttpClient.get(uri, headers: _authHeaders)),
+    final response = _decodeResponse(
+      await diagnosticHttpClient.get(uri, headers: _authHeaders),
     );
+    onWarnings?.call(
+      (response['Warnings'] as List? ?? []).map((e) => e.toString()).toList(),
+    );
+    return _dataList(response);
   }
 
   static Future<Map<String, dynamic>> downloadTicketDocument({
@@ -1135,7 +1144,9 @@ class APIHelper {
             'FileName': fileName,
           },
         );
-    final decoded = _decodeResponse(await diagnosticHttpClient.get(uri, headers: _authHeaders));
+    final decoded = _decodeResponse(
+      await diagnosticHttpClient.get(uri, headers: _authHeaders),
+    );
     final data = decoded is Map && decoded['Data'] is Map
         ? decoded['Data']
         : decoded;

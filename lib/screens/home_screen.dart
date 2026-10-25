@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+import 'package:ticket_tracker_app/utils/messages_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ticket_tracker_app/screens/report_issue_screen.dart';
@@ -18,7 +20,8 @@ import 'package:ticket_tracker_app/widgets/build_version_label.dart';
 /// Home screen shown after successful login.
 /// Displays navigation buttons and support contact info with branding.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({Key? key, this.messagesApi}) : super(key: key);
+  final MessagesApi? messagesApi;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -26,12 +29,27 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String userName = "User";
+  bool unreadMessages = false;
+  Future<void> _refreshMessages() async {
+    try {
+      final result = await (widget.messagesApi ?? MessagesApi()).call(
+        "GetMessages",
+        query: {"BeforeKey": "0", "PageSize": "1"},
+      );
+      if (mounted)
+        setState(
+          () => unreadMessages =
+              (int.tryParse(result["UnreadCount"]?.toString() ?? "") ?? 0) > 0,
+        );
+    } catch (_) {}
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {});
     _loadUserInfo();
+    _refreshMessages();
   }
 
   void _loadUserInfo() async {
@@ -77,12 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildMainButton(
-                      icon: Icons.mail_outline,
-                      label: 'Messages',
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MessagesScreen())),
-                    ),
-                    const SizedBox(height: 20),
-                    _buildMainButton(
                       icon: Icons.search,
                       label: 'View Tickets',
                       onTap: () {
@@ -105,6 +117,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             builder: (context) => ReportIssueScreen(),
                           ),
                         );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    _buildMainButton(
+                      icon: Icons.mail_outline,
+                      label: 'Messages',
+                      attention: unreadMessages,
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MessagesScreen(),
+                          ),
+                        );
+                        if (mounted) await _refreshMessages();
                       },
                     ),
                     const SizedBox(height: 20),
@@ -321,12 +348,20 @@ class _HomeScreenState extends State<HomeScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool attention = false,
   }) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         icon: Icon(icon, size: 24),
-        label: Text(label, style: const TextStyle(fontSize: 18)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 18,
+            color: attention ? Colors.red[900] : Colors.black,
+            fontWeight: attention ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.lightBlueAccent,
           foregroundColor: Colors.black,
@@ -342,10 +377,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Launches phone dialer
   void _launchCall() async {
-    final Uri url = Uri.parse('tel:8479852060');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+    final mobile =
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    if (mobile) {
+      try {
+        if (await launchUrl(Uri.parse('tel:8479852060'))) return;
+      } catch (_) {}
     }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Call Porter Lee Support'),
+        content: const SelectableText(
+          'Please call us at (847) 985-2060. We’re happy to help.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await Clipboard.setData(const ClipboardData(text: '8479852060'));
+              if (c.mounted) Navigator.pop(c);
+            },
+            child: const Text('Copy number'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Launches email client
