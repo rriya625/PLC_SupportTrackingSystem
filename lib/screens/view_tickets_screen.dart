@@ -6,6 +6,7 @@ import 'package:ticket_tracker_app/utils/dialogs.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:ticket_tracker_app/utils/web_download_helper_stub.dart'
     if (dart.library.html) 'package:ticket_tracker_app/utils/web_download_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ViewTicketsScreen extends StatefulWidget {
   const ViewTicketsScreen({Key? key}) : super(key: key);
@@ -19,6 +20,18 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   String status = 'Open';
   String searchBy = 'Ticket #'; // default set
   String sortBy = 'Last Activity';
+  String sortDirection = 'ASC';
+  static const List<String> _employeeSortFields = [
+    'Ticket Key',
+    'Start Date',
+    'Last Activity',
+    'Priority',
+    'Status',
+    'Department',
+    'Short Desc',
+    'Assigned To',
+    'End Date',
+  ];
   final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   List<Map<String, dynamic>> tickets = [];
@@ -45,7 +58,11 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     final now = DateTime.now();
     fromDate = now.subtract(const Duration(days: 365));
     toDate = now;
-    ticketType = Constants.isEmployee ? 'Department' : 'Yours';
+    ticketType = 'Yours';
+    if (Constants.isEmployee) {
+      sortBy = 'Ticket Key';
+      sortDirection = 'DESC';
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       searchFocusNode.requestFocus();
@@ -55,6 +72,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Future<void> _initializeSearch() async {
+    await _loadSortPreference();
     await Future.wait([_fetchDepartments(), _fetchTicketGroups()]);
     if (mounted) await _fetchAndSetTickets();
   }
@@ -71,10 +89,10 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
       setState(() {
         if (Constants.isEmployee) {
           departments = [
-            {'Code': '', 'Description': 'All Departments'},
+            {'Code': 'ALL', 'Description': 'All Departments'},
             ...validDepartments,
           ];
-          selectedDepartmentCode = '';
+          selectedDepartmentCode = 'ALL';
         } else {
           final ownDepartment = validDepartments.where(
             (item) => item['Code'] == Constants.qbLinkKey,
@@ -110,7 +128,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   String? get _departmentCodeForRequest {
     if (!Constants.isEmployee) return Constants.qbLinkKey;
     final code = selectedDepartmentCode?.trim() ?? '';
-    return code.isEmpty ? null : code;
+    return code.isEmpty ? 'ALL' : code;
   }
 
   bool get _isUnboundedDepartmentSearch {
@@ -119,8 +137,50 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         (searchBy == 'Ticket #' || searchBy == 'Description');
     return Constants.isEmployee &&
         ticketType == 'Department' &&
-        _departmentCodeForRequest == null &&
+        _departmentCodeForRequest == 'ALL' &&
         !hasSearchValue;
+  }
+
+  String get _sortByForRequest =>
+      Constants.isEmployee ? '$sortBy $sortDirection' : sortBy;
+
+  String get _sortPreferencePrefix =>
+      'ticketSort.${Constants.buildEnv}.${Constants.userID}';
+
+  Future<void> _loadSortPreference() async {
+    if (!Constants.isEmployee) return;
+    final prefs = await SharedPreferences.getInstance();
+    final field = prefs.getString('$_sortPreferencePrefix.field');
+    final direction = prefs.getString('$_sortPreferencePrefix.direction');
+    if (!mounted) return;
+    setState(() {
+      if (field != null && _employeeSortFields.contains(field)) sortBy = field;
+      if (direction == 'ASC' || direction == 'DESC') {
+        sortDirection = direction!;
+      }
+    });
+  }
+
+  Future<void> _saveSortPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('$_sortPreferencePrefix.field', sortBy);
+    await prefs.setString('$_sortPreferencePrefix.direction', sortDirection);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Default sort saved on this device.')),
+      );
+    }
+  }
+
+  Future<void> _resetSortPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_sortPreferencePrefix.field');
+    await prefs.remove('$_sortPreferencePrefix.direction');
+    if (!mounted) return;
+    setState(() {
+      sortBy = 'Ticket Key';
+      sortDirection = 'DESC';
+    });
   }
 
   Future<bool> _validateDepartmentScope() async {
@@ -253,7 +313,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         ticketType: ticketType,
         status: status,
         searchBy: searchBy,
-        sortBy: sortBy,
+        sortBy: _sortByForRequest,
         searchValue: searchController.text,
         fromDate: fromDate != null ? _formatApiDate(fromDate!) : '',
         toDate: toDate != null ? _formatApiDate(toDate!) : '',
@@ -337,7 +397,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         ticketType: ticketType,
         status: status,
         searchBy: searchBy,
-        sortBy: sortBy,
+        sortBy: _sortByForRequest,
         searchValue: searchVal,
         fromDate: from,
         toDate: to,
@@ -689,13 +749,53 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left: Sort By Dropdown
               Expanded(
-                child: _buildDropdown(
-                  'Sort By',
-                  ['Last Activity', 'Start Date'],
-                  sortBy,
-                  (val) => setState(() => sortBy = val!),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDropdown(
+                            'Sort By',
+                            Constants.isEmployee
+                                ? _employeeSortFields
+                                : ['Last Activity', 'Start Date'],
+                            sortBy,
+                            (val) => setState(() => sortBy = val!),
+                          ),
+                        ),
+                        if (Constants.isEmployee) ...[
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 110,
+                            child: _buildDropdown(
+                              'Direction',
+                              const ['ASC', 'DESC'],
+                              sortDirection,
+                              (val) => setState(() => sortDirection = val!),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    if (Constants.isEmployee)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 8,
+                          children: [
+                            TextButton(
+                              onPressed: _saveSortPreference,
+                              child: const Text('Save as default'),
+                            ),
+                            TextButton(
+                              onPressed: _resetSortPreference,
+                              child: const Text('Reset'),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               ),
               const SizedBox(width: 12),

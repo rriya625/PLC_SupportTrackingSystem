@@ -783,9 +783,50 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            fileName,
-                            style: Theme.of(context).textTheme.bodyLarge,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  fileName,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove file',
+                                onPressed: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (confirmContext) => AlertDialog(
+                                      title: const Text('Remove attachment?'),
+                                      content: Text('Remove "$fileName"?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                            confirmContext,
+                                            false,
+                                          ),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () => Navigator.pop(
+                                            confirmContext,
+                                            true,
+                                          ),
+                                          child: const Text('Remove'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed == true) {
+                                    setState(
+                                      () => _attachedImages.remove(item),
+                                    );
+                                    setStateDialog(() {});
+                                  }
+                                },
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           ClipRRect(
@@ -967,9 +1008,57 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // File name
-                            Text(
-                              name.isNotEmpty ? name : 'Unnamed File',
-                              style: Theme.of(context).textTheme.bodyLarge,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    name.isNotEmpty ? name : 'Unnamed File',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyLarge,
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove file',
+                                  onPressed: () async {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (confirmContext) => AlertDialog(
+                                        title: const Text('Remove attachment?'),
+                                        content: Text('Remove "$name"?'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              confirmContext,
+                                              false,
+                                            ),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () => Navigator.pop(
+                                              confirmContext,
+                                              true,
+                                            ),
+                                            child: const Text('Remove'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed == true) {
+                                      final id = file['LocalID'];
+                                      setState(() {
+                                        _pendingWebFiles.removeWhere(
+                                          (item) => id != null
+                                              ? item['LocalID'] == id
+                                              : identical(item, file),
+                                        );
+                                      });
+                                      setStateDialog(() {});
+                                    }
+                                  },
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 8),
 

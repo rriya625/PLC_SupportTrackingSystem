@@ -150,7 +150,12 @@ void pickFilesForWeb({
         final fileBytes = await completer.future;
         final base64 = base64Encode(fileBytes);
 
-        pendingFiles.add({'sFileName': file.name, 'Base64Content': base64});
+        pendingFiles.add({
+          'LocalID':
+              '${DateTime.now().microsecondsSinceEpoch}-${pendingFiles.length}',
+          'sFileName': file.name,
+          'Base64Content': base64,
+        });
       }
     } catch (e) {
       print('Error reading file(s): $e');

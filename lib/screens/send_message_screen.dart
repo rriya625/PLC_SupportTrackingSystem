@@ -22,12 +22,16 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   List<String> _messageToOptions = [];
   String? _selectedMessageTo;
   String? _ticketKey;
+  List<Map<String, dynamic>> _employeeRecipients = [];
+  String? _selectedEmployeeId;
+  bool _sendToEmployee = false;
 
   @override
   void initState() {
     super.initState();
     _name = Constants.contactName;
     _fetchMessageToList();
+    if (Constants.isEmployee) _fetchEmployeeRecipients();
 
     // ✅ Autofocus after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -80,6 +84,22 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     }
   }
 
+  Future<void> _fetchEmployeeRecipients() async {
+    try {
+      final recipients = await APIHelper.getEmployeeRecipients();
+      if (!mounted) return;
+      setState(() {
+        _employeeRecipients = recipients;
+        _selectedEmployeeId = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to load employees: $error')),
+      );
+    }
+  }
+
   void _sendMessage() async {
     final message = _messageController.text.trim();
     if (_ticketKey == null) {
@@ -89,7 +109,15 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       return;
     }
 
-    if (_selectedMessageTo == null || _selectedMessageTo == 'None') {
+    if (_sendToEmployee && _selectedEmployeeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an employee')),
+      );
+      return;
+    }
+
+    if (!_sendToEmployee &&
+        (_selectedMessageTo == null || _selectedMessageTo == 'None')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a recipient')),
       );
@@ -100,6 +128,26 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Message cannot be empty')));
+      return;
+    }
+
+    if (_sendToEmployee) {
+      try {
+        await APIHelper.sendEmployeeMessage(
+          ticketKey: int.parse(_ticketKey!),
+          employeeId: _selectedEmployeeId!,
+          messageText: message,
+        );
+        if (!mounted) return;
+        await showMessageDialog(context, 'Your message has been sent.');
+        if (mounted) Navigator.of(context).pop();
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send message: $error')),
+          );
+        }
+      }
       return;
     }
 
@@ -173,29 +221,81 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   style: TextStyle(fontSize: 16),
                 ),
                 const SizedBox(height: 6),
-                DropdownButtonFormField<String>(
-                  value: _selectedMessageTo,
-                  items: _messageToOptions
-                      .map(
-                        (target) => DropdownMenuItem(
-                          value: target,
-                          child: Text(target),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedMessageTo = value;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
+                if (Constants.isEmployee) ...[
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Group')),
+                      ButtonSegment(value: true, label: Text('Employee')),
+                    ],
+                    selected: {_sendToEmployee},
+                    onSelectionChanged: (value) =>
+                        setState(() => _sendToEmployee = value.first),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_sendToEmployee)
+                  Autocomplete<Map<String, dynamic>>(
+                    displayStringForOption: (employee) {
+                      final id = employee['EmployeeID']?.toString() ?? '';
+                      final name = employee['EmployeeName']?.toString() ?? id;
+                      return '$name ($id)';
+                    },
+                    optionsBuilder: (text) {
+                      final query = text.text.trim().toLowerCase();
+                      if (query.isEmpty) return _employeeRecipients;
+                      return _employeeRecipients.where((employee) {
+                        final id =
+                            employee['EmployeeID']?.toString().toLowerCase() ??
+                            '';
+                        final name =
+                            employee['EmployeeName']
+                                ?.toString()
+                                .toLowerCase() ??
+                            '';
+                        return id.contains(query) || name.contains(query);
+                      });
+                    },
+                    onSelected: (employee) => setState(
+                      () => _selectedEmployeeId = employee['EmployeeID']
+                          ?.toString(),
+                    ),
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: const InputDecoration(
+                              labelText: 'Search employee',
+                              hintText: 'Name or employee ID',
+                              border: OutlineInputBorder(),
+                            ),
+                          );
+                        },
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    value: _selectedMessageTo,
+                    items: _messageToOptions
+                        .map(
+                          (target) => DropdownMenuItem(
+                            value: target,
+                            child: Text(target),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedMessageTo = value;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 12,
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 24),
                 const Text(
                   'Enter your message here:',

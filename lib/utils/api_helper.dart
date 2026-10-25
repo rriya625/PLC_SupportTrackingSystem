@@ -6,6 +6,17 @@ import 'package:http/http.dart' as http;
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:flutter/foundation.dart';
 
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+  final dynamic data;
+
+  const ApiException(this.statusCode, this.message, [this.data]);
+
+  @override
+  String toString() => message;
+}
+
 /// APIHelper
 ///
 /// Centralizes all HTTP-based service calls for the application, including:
@@ -18,6 +29,42 @@ import 'package:flutter/foundation.dart';
 /// This class provides static methods for interacting with backend APIs and
 /// manages authentication tokens and user session information.
 class APIHelper {
+  static Map<String, String> get _authHeaders => {
+    'Authorization': 'Bearer ${Constants.accessToken}',
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  static dynamic _decodeResponse(http.Response response) {
+    dynamic decoded;
+    try {
+      decoded = response.body.trim().isEmpty ? null : jsonDecode(response.body);
+    } catch (_) {
+      decoded = null;
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded is Map
+          ? (decoded['Message'] ?? decoded['message'] ?? response.reasonPhrase)
+                ?.toString()
+          : response.reasonPhrase;
+      throw ApiException(
+        response.statusCode,
+        message ?? 'Request failed (${response.statusCode}).',
+        decoded,
+      );
+    }
+    return decoded;
+  }
+
+  static List<Map<String, dynamic>> _dataList(dynamic decoded) {
+    final raw = decoded is Map ? (decoded['Data'] ?? decoded['data']) : decoded;
+    if (raw is! List) return [];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   /// 1. Authentication & Token Handling
 
   /// Ensures the access token is valid.
@@ -895,5 +942,235 @@ class APIHelper {
         'Failed to update ticket: ${response.statusCode} → ${response.body}',
       );
     }
+  }
+
+  static Future<Map<String, List<Map<String, dynamic>>>>
+  getActivityOptions() async {
+    await ensureValidToken();
+    final response = await http.get(
+      Uri.parse('${Constants.baseUrlData}GetActivityOptions'),
+      headers: _authHeaders,
+    );
+    final decoded = _decodeResponse(response);
+    final source = decoded is Map && decoded['Data'] is Map
+        ? decoded['Data'] as Map
+        : decoded as Map;
+    List<Map<String, dynamic>> listFor(String name) {
+      final value = source[name];
+      return value is List
+          ? value
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+          : [];
+    }
+
+    return {
+      'ActivityTypes': listFor('ActivityTypes'),
+      'Statuses': listFor('Statuses'),
+      'Priorities': listFor('Priorities'),
+    };
+  }
+
+  static Future<Map<String, dynamic>> createEmployeeActivity({
+    required int ticketKey,
+    required String longDesc,
+    required String activityType,
+    required String status,
+    required String priority,
+    required bool critical,
+    required bool webPosting,
+  }) async {
+    await ensureValidToken();
+    final response = await http.post(
+      Uri.parse('${Constants.baseUrlData}CreateEmployeeActivity'),
+      headers: _authHeaders,
+      body: jsonEncode({
+        'TicketKey': ticketKey,
+        'LongDesc': longDesc,
+        'ActivityType': activityType,
+        'Status': status,
+        'Priority': priority,
+        'Critical': critical ? 'T' : 'F',
+        'WebPosting': webPosting ? 'Y' : 'N',
+      }),
+    );
+    final decoded = _decodeResponse(response);
+    return decoded is Map<String, dynamic>
+        ? decoded
+        : Map<String, dynamic>.from(decoded as Map);
+  }
+
+  static Future<void> updateActivity({
+    required int ticketKey,
+    required int historyNumber,
+    required String longDesc,
+    required String expectedLongDesc,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}UpdateActivity'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'HistoryNumber': historyNumber,
+          'LongDesc': longDesc,
+          'ExpectedLongDesc': expectedLongDesc,
+        }),
+      ),
+    );
+  }
+
+  static Future<void> deleteActivity({
+    required int ticketKey,
+    required int historyNumber,
+    required String expectedLongDesc,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}DeleteActivity'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'HistoryNumber': historyNumber,
+          'ExpectedLongDesc': expectedLongDesc,
+          'Confirmed': true,
+        }),
+      ),
+    );
+  }
+
+  static Future<Map<String, dynamic>> queueActivityEmail({
+    required int ticketKey,
+    required int historyNumber,
+    required String recipients,
+    required String subject,
+    required String body,
+    required String requestId,
+  }) async {
+    await ensureValidToken();
+    final decoded = _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}QueueActivityEmail'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'HistoryNumber': historyNumber,
+          'Recipients': recipients,
+          'Subject': subject,
+          'Body': body,
+          'RequestID': requestId,
+        }),
+      ),
+    );
+    return decoded is Map<String, dynamic>
+        ? decoded
+        : Map<String, dynamic>.from(decoded as Map);
+  }
+
+  static Future<List<Map<String, dynamic>>> getEmployeeRecipients() async {
+    await ensureValidToken();
+    final response = await http.get(
+      Uri.parse('${Constants.baseUrlData}GetEmployeeRecipients'),
+      headers: _authHeaders,
+    );
+    return _dataList(_decodeResponse(response));
+  }
+
+  static Future<void> sendEmployeeMessage({
+    required int ticketKey,
+    required String employeeId,
+    required String messageText,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}SendEmployeeMessage'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'EmployeeID': employeeId,
+          'MessageText': messageText,
+        }),
+      ),
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getTicketDocuments(
+    int ticketKey,
+  ) async {
+    await ensureValidToken();
+    final uri = Uri.parse(
+      '${Constants.baseUrlData}GetTicketDocuments',
+    ).replace(queryParameters: {'TicketKey': '$ticketKey'});
+    return _dataList(
+      _decodeResponse(await http.get(uri, headers: _authHeaders)),
+    );
+  }
+
+  static Future<Map<String, dynamic>> downloadTicketDocument({
+    required int ticketKey,
+    required int historyNumber,
+    required String source,
+    required String fileName,
+  }) async {
+    await ensureValidToken();
+    final uri = Uri.parse('${Constants.baseUrlData}DownloadTicketDocument')
+        .replace(
+          queryParameters: {
+            'TicketKey': '$ticketKey',
+            'HistoryNumber': '$historyNumber',
+            'Source': source,
+            'FileName': fileName,
+          },
+        );
+    final decoded = _decodeResponse(await http.get(uri, headers: _authHeaders));
+    final data = decoded is Map && decoded['Data'] is Map
+        ? decoded['Data']
+        : decoded;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  static Future<void> deleteTicketAttachment({
+    required int ticketKey,
+    required int customerDocKey,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}DeleteTicketAttachment'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'CustomerDocKey': customerDocKey,
+          'Confirmed': true,
+        }),
+      ),
+    );
+  }
+
+  static Future<void> updateTicketDescription({
+    required int ticketKey,
+    required String shortDesc,
+    required String longDesc,
+    required String expectedShortDesc,
+    required String expectedLongDesc,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await http.post(
+        Uri.parse('${Constants.baseUrlData}UpdateTicketDescription'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'ShortDesc': shortDesc,
+          'LongDesc': longDesc,
+          'ExpectedShortDesc': expectedShortDesc,
+          'ExpectedLongDesc': expectedLongDesc,
+        }),
+      ),
+    );
   }
 }

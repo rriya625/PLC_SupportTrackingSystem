@@ -16,6 +16,7 @@ import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:ticket_tracker_app/utils/document_download_helper.dart';
 
 class TicketDescriptionScreenStateful extends StatefulWidget {
   const TicketDescriptionScreenStateful({Key? key}) : super(key: key);
@@ -37,6 +38,9 @@ class _TicketDescriptionScreenState
   String customerReference = '';
   String sharepointLink = '';
   String sendConfirmationTo = '';
+  String _originalShortDescription = '';
+  String _originalRawLongDescription = '';
+  bool _canEditDescription = false;
   Map<String, String> _statusDescriptions = {};
   final ImagePicker _picker = ImagePicker();
   final List<dynamic> _attachedImages = [];
@@ -60,6 +64,12 @@ class _TicketDescriptionScreenState
             currentStatus = _statusDisplay(data['Status']);
             shortDescription = data['ShortDesc'] ?? '';
             longDescription = _parseRtf(data['LongDesc'] ?? '');
+            _originalShortDescription = data['ShortDesc']?.toString() ?? '';
+            _originalRawLongDescription =
+                (data['RawLongDesc'] ?? data['LongDesc'])?.toString() ?? '';
+            _canEditDescription =
+                data['CanEditDescription'] == true ||
+                data['CanEditDescription']?.toString().toUpperCase() == 'Y';
             customerReference = data['CustomerReference'] ?? '';
             sharepointLink = data['SharepointLink'] ?? '';
             sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
@@ -105,7 +115,21 @@ class _TicketDescriptionScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        actions: [],
+        actions: Constants.isEmployee
+            ? [
+                if (_canEditDescription)
+                  IconButton(
+                    tooltip: 'Edit ticket description',
+                    onPressed: _editTicketDescription,
+                    icon: const Icon(Icons.edit_note),
+                  ),
+                IconButton(
+                  tooltip: 'Ticket documents',
+                  onPressed: _showTicketDocuments,
+                  icon: const Icon(Icons.folder_open),
+                ),
+              ]
+            : [],
         title: const Text('Ticket Description'),
         centerTitle: true,
         backgroundColor: Colors.blue[800],
@@ -575,6 +599,7 @@ class _TicketDescriptionScreenState
                               builder: (context) => ViewActivityScreen(
                                 ticketNumber: ticketNumber,
                                 shortDescription: shortDescription,
+                                confirmationEmailTo: sendConfirmationTo,
                               ),
                               settings: RouteSettings(arguments: ticketNumber),
                             ),
@@ -603,6 +628,264 @@ class _TicketDescriptionScreenState
         ),
       ),
     );
+  }
+
+  Future<void> _editTicketDescription() async {
+    final shortController = TextEditingController(text: shortDescription);
+    final longController = TextEditingController(text: longDescription);
+    final draft = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Correct Ticket Description'),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Saving replaces any legacy rich-text formatting with plain text.',
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: shortController,
+                  maxLength: 250,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: longController,
+                  maxLines: 12,
+                  decoration: const InputDecoration(
+                    labelText: 'Details',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, {
+              'short': shortController.text.trim(),
+              'long': longController.text.trim(),
+            }),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    shortController.dispose();
+    longController.dispose();
+    if (draft == null || draft['short']!.isEmpty || draft['long']!.isEmpty) {
+      return;
+    }
+    try {
+      await APIHelper.updateTicketDescription(
+        ticketKey: int.parse(ticketKey),
+        shortDesc: draft['short']!,
+        longDesc: draft['long']!,
+        expectedShortDesc: _originalShortDescription,
+        expectedLongDesc: _originalRawLongDescription,
+      );
+      final updated = await APIHelper.fetchTicketDetails(ticketKey);
+      if (updated == null || !mounted) return;
+      setState(() {
+        shortDescription = updated['ShortDesc']?.toString() ?? '';
+        _originalShortDescription = shortDescription;
+        _originalRawLongDescription =
+            (updated['RawLongDesc'] ?? updated['LongDesc'])?.toString() ?? '';
+        longDescription = _parseRtf(updated['LongDesc']?.toString() ?? '');
+        _canEditDescription =
+            updated['CanEditDescription'] == true ||
+            updated['CanEditDescription']?.toString().toUpperCase() == 'Y';
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      if (error.statusCode == 409) {
+        await showMessageDialog(
+          context,
+          'This ticket changed after you opened it. Your draft was not submitted. '
+          'The latest ticket will now be loaded so you can compare it.',
+        );
+        final updated = await APIHelper.fetchTicketDetails(ticketKey);
+        if (updated != null && mounted) {
+          setState(() {
+            shortDescription = updated['ShortDesc']?.toString() ?? '';
+            _originalShortDescription = shortDescription;
+            _originalRawLongDescription =
+                (updated['RawLongDesc'] ?? updated['LongDesc'])?.toString() ??
+                '';
+            longDescription = _parseRtf(updated['LongDesc']?.toString() ?? '');
+          });
+        }
+      } else {
+        await showMessageDialog(context, error.message);
+      }
+    }
+  }
+
+  Future<void> _showTicketDocuments() async {
+    try {
+      final documents = await APIHelper.getTicketDocuments(
+        int.parse(ticketKey),
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          final grouped = <String, List<Map<String, dynamic>>>{
+            'CUSTOMER': [],
+            'DESIGN': [],
+            'ACTIVITY': [],
+          };
+          for (final document in documents) {
+            final source = document['Source']?.toString().toUpperCase() ?? '';
+            grouped.putIfAbsent(source, () => []).add(document);
+          }
+          return AlertDialog(
+            title: const Text('Ticket Documents'),
+            content: SizedBox(
+              width: 680,
+              height: 520,
+              child: ListView(
+                children: [
+                  _documentSection('Customer uploads', grouped['CUSTOMER']!),
+                  _documentSection('Design documents', grouped['DESIGN']!),
+                  _documentSection(
+                    'Activity files (grouped by activity number)',
+                    grouped['ACTIVITY']!,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (error) {
+      if (mounted)
+        await showMessageDialog(context, 'Unable to load documents: $error');
+    }
+  }
+
+  Widget _documentSection(String title, List<Map<String, dynamic>> documents) {
+    documents.sort((a, b) {
+      final ah = int.tryParse(a['HistoryNumber']?.toString() ?? '') ?? 0;
+      final bh = int.tryParse(b['HistoryNumber']?.toString() ?? '') ?? 0;
+      return ah.compareTo(bh);
+    });
+    return ExpansionTile(
+      initiallyExpanded: true,
+      title: Text('$title (${documents.length})'),
+      children: documents.isEmpty
+          ? const [ListTile(title: Text('No files'))]
+          : documents.map((document) {
+              final fileName = document['FileName']?.toString() ?? '';
+              final source = document['Source']?.toString() ?? '';
+              final history =
+                  int.tryParse(document['HistoryNumber']?.toString() ?? '') ??
+                  0;
+              final canDelete =
+                  document['CanDelete'] == true ||
+                  document['CanDelete']?.toString().toUpperCase() == 'Y';
+              return ListTile(
+                title: Text(fileName),
+                subtitle: source == 'ACTIVITY'
+                    ? Text('Activity #$history')
+                    : Text(source),
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    IconButton(
+                      tooltip: 'Download',
+                      onPressed: () => _downloadDocument(document),
+                      icon: const Icon(Icons.download),
+                    ),
+                    if (canDelete)
+                      IconButton(
+                        tooltip: 'Delete',
+                        onPressed: () => _deleteDocument(document),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                  ],
+                ),
+              );
+            }).toList(),
+    );
+  }
+
+  Future<void> _downloadDocument(Map<String, dynamic> document) async {
+    try {
+      final data = await APIHelper.downloadTicketDocument(
+        ticketKey: int.parse(ticketKey),
+        historyNumber:
+            int.tryParse(document['HistoryNumber']?.toString() ?? '') ?? 0,
+        source: document['Source']?.toString() ?? '',
+        fileName: document['FileName']?.toString() ?? '',
+      );
+      final fileName =
+          data['FileName']?.toString() ??
+          document['FileName']?.toString() ??
+          'download';
+      final bytes = base64Decode(data['Base64Content']?.toString() ?? '');
+      final message = await saveDownloadedDocument(bytes, fileName);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (error) {
+      if (mounted) await showMessageDialog(context, 'Download failed: $error');
+    }
+  }
+
+  Future<void> _deleteDocument(Map<String, dynamic> document) async {
+    final fileName = document['FileName']?.toString() ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove attachment?'),
+        content: Text('Remove "$fileName" from this ticket?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await APIHelper.deleteTicketAttachment(
+        ticketKey: int.parse(ticketKey),
+        customerDocKey:
+            int.tryParse(document['CustomerDocKey']?.toString() ?? '') ?? 0,
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      await _showTicketDocuments();
+    } catch (error) {
+      if (mounted)
+        await showMessageDialog(context, 'Unable to remove attachment: $error');
+    }
   }
 
   Widget _buildField(String label, String value) {
