@@ -1,3 +1,4 @@
+import 'package:ticket_tracker_app/utils/document_bytes.dart';
 import 'package:ticket_tracker_app/utils/document_download_helper.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/utils/ticket_email.dart';
@@ -127,7 +128,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
         source: 'ACTIVITY',
         fileName: document['FileName'].toString(),
       );
-      final bytes = base64Decode(data['Base64Content'].toString());
+      final bytes = decodeDocumentBytes(data['Base64Content'].toString());
       final name = data['FileName'].toString();
       if (!mounted) return;
       if (RegExp(
@@ -210,8 +211,19 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     final types = activityOptions['ActivityTypes'] ?? const [];
     final statuses = activityOptions['Statuses'] ?? const [];
     final priorities = activityOptions['Priorities'] ?? const [];
-    String? type = types.isEmpty ? null : _code(types.first);
-    String? status = statuses.isEmpty ? null : _code(statuses.first);
+    final ticket = await APIHelper.fetchTicketDetails(widget.ticketNumber);
+    if (!mounted) return;
+    if (ticket == null) {
+      _showError(
+        const ApiException(503, 'Unable to load the current ticket status.'),
+      );
+      return;
+    }
+    String? type = types.any((e) => _code(e) == 'CORR') ? 'CORR' : null;
+    final currentStatus = ticket['Status']?.toString();
+    String? status = statuses.any((e) => _code(e) == currentStatus)
+        ? currentStatus
+        : null;
     String? priority = priorities.any((e) => _code(e) == '5')
         ? '5'
         : (priorities.isEmpty ? null : _code(priorities.first));

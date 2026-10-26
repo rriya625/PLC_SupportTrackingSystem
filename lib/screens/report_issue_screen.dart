@@ -170,6 +170,28 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       _pendingWebFiles.isNotEmpty ||
       _attachedImages.isNotEmpty;
 
+  Future<bool> _confirmClearAttachments() async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('Remove all attachments?'),
+          content: const Text(
+            'All selected attachments will be removed from this ticket draft.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child: const Text('Remove all'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
   Future<bool> _confirmDiscardChanges() async {
     if (!_hasUnsavedChanges) return true;
 
@@ -582,6 +604,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                           _detailedDescController.clear();
                           _customerRefController.clear();
                           _customerSharepointLink.clear();
+                          _confirmationToController.text =
+                              _initialConfirmationEmail;
                           _selectedPriority = _priorityOptions.firstWhere(
                             (item) => item.startsWith("5 -"),
                             orElse: () => _priorityOptions.isNotEmpty
@@ -912,7 +936,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    if (!await _confirmClearAttachments() || !mounted) return;
                     setState(() {
                       _attachedImages.clear();
                     });
@@ -1129,7 +1154,8 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    if (!await _confirmClearAttachments() || !mounted) return;
                     setState(() {
                       _pendingWebFiles.clear();
                     });

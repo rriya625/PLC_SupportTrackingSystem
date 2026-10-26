@@ -1,3 +1,4 @@
+import 'package:ticket_tracker_app/utils/document_bytes.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/screens/view_activity.dart';
 import 'package:ticket_tracker_app/screens/message_history.dart';
@@ -6,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
@@ -578,7 +578,9 @@ class _TicketDescriptionScreenState
           data['FileName']?.toString() ??
           document['FileName']?.toString() ??
           'download';
-      final bytes = base64Decode(data['Base64Content']?.toString() ?? '');
+      final bytes = decodeDocumentBytes(
+        data['Base64Content']?.toString() ?? '',
+      );
       final message = await saveDownloadedDocument(bytes, fileName);
       if (mounted) {
         ScaffoldMessenger.of(

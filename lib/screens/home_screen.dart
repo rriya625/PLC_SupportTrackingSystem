@@ -581,6 +581,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     final confirmPassword = confirmPasswordController.text
                         .trim();
 
+                    if (currentPassword.isEmpty ||
+                        newPassword.isEmpty ||
+                        confirmPassword.isEmpty) {
+                      setState(
+                        () => errorText =
+                            'Enter your current password, new password, and confirmation.',
+                      );
+                      return;
+                    }
+
                     if (newPassword == currentPassword) {
                       setState(
                         () => errorText =

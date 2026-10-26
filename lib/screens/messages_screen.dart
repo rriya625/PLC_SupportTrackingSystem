@@ -511,7 +511,7 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: text,
-              autofocus: true,
+              autofocus: widget.reply != null,
               minLines: 10,
               maxLines: 12,
               maxLength: 4000,

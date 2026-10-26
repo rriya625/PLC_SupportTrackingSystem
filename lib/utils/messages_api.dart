@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:ticket_tracker_app/constants.dart';
 import 'diagnostic_http_client.dart';
+import 'api_helper.dart';
 
 class MessagesApi {
   Future<Map<String, dynamic>> call(
@@ -8,6 +9,7 @@ class MessagesApi {
     Map<String, dynamic>? body,
     Map<String, String>? query,
   }) async {
+    await APIHelper.ensureValidToken();
     final uri = Uri.parse(
       '${Constants.baseUrlData}$endpoint',
     ).replace(queryParameters: query);
@@ -29,7 +31,10 @@ class MessagesApi {
         data['Code'].toString() != '300') {
       throw Exception(
         data is Map
-            ? (data['Message'] ?? data['message'] ?? 'Message request failed')
+            ? (data['Message'] ??
+                  data['message'] ??
+                  (data['error'] is Map ? data['error']['message'] : null) ??
+                  'Message request failed (HTTP ${response.statusCode})')
             : 'Message request failed',
       );
     }
@@ -37,6 +42,7 @@ class MessagesApi {
   }
 
   Future<List<String>> groups() async {
+    await APIHelper.ensureValidToken();
     final response = await diagnosticHttpClient.get(
       Uri.parse(
         '${Constants.baseUrlData}GetMessageToList',
