@@ -48,6 +48,10 @@ class Constants {
   static String userPassword = '';
   static String departmentName = '';
   static String userType = '';
+  static String webViewAllDeptTickets = 'F';
+  static bool get canViewDepartmentTickets =>
+      isEmployee ||
+      ['T', 'Y'].contains(webViewAllDeptTickets.trim().toUpperCase());
   static String accessLevel = '';
   static String debugMode = 'N';
   static String doNotLoadTicketsOnLoad = 'F';

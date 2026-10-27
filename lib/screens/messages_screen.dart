@@ -19,6 +19,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
   final List<Map<String, dynamic>> rows = [];
   bool busy = false, more = false;
   String? error;
+  String customer = '', sender = '';
+  DateTime? fromDate, toDate;
+  List<Map<String, dynamic>>? customerOptions, senderOptions;
+  Map<String, String> appliedFilters = {};
+  bool pickingFilter = false;
+
   @override
   void initState() {
     super.initState();
@@ -33,8 +39,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
     try {
       final result = await api.call(
-        'GetMessages',
+        appliedFilters.isEmpty ? 'GetMessages' : 'GetFilteredMessages',
         query: {
+          ...appliedFilters,
           'BeforeKey': next && rows.isNotEmpty
               ? rows.last['MessageKey'].toString()
               : '0',
@@ -56,6 +63,235 @@ class _MessagesScreenState extends State<MessagesScreen> {
     }
   }
 
+  String dateText(DateTime? date) =>
+      date == null ? 'Any date' : date.toIso8601String().substring(0, 10);
+  String filterLabel(bool isCustomer) {
+    final value = isCustomer ? customer : sender;
+    final options = isCustomer ? customerOptions : senderOptions;
+    if (value.isEmpty) return isCustomer ? 'All customers' : 'Anyone';
+    final found = options?.where((o) => o['Code'] == value);
+    return found != null && found.isNotEmpty
+        ? found.first['Name'].toString()
+        : value;
+  }
+
+  Future<void> chooseFilter(bool isCustomer) async {
+    if (pickingFilter || busy) return;
+    pickingFilter = true;
+    try {
+      var options = isCustomer ? customerOptions : senderOptions;
+      if (options == null) {
+        final result = await withPortalLoading(
+          context,
+          isCustomer ? 'Loading customers...' : 'Loading senders...',
+          () => api.call(
+            'GetMessageFilterOptions',
+            query: {
+              'FilterType': isCustomer ? 'CUSTOMER' : 'SENDER',
+              'QBLinkKey': customer,
+            },
+          ),
+        );
+        options = List<Map<String, dynamic>>.from(result['Data'] ?? []);
+        if (isCustomer) {
+          customerOptions = options;
+        } else {
+          senderOptions = options;
+        }
+      }
+      if (!mounted) return;
+      final choices = options;
+      var search = '';
+      final selected = await showDialog<String>(
+        context: context,
+        builder: (c) => StatefulBuilder(
+          builder: (c, update) {
+            final filtered = choices!
+                .where(
+                  (o) => '${o['Code']} ${o['Name']}'.toLowerCase().contains(
+                    search.toLowerCase(),
+                  ),
+                )
+                .toList();
+            return AlertDialog(
+              title: Text(isCustomer ? 'Customer' : 'From'),
+              content: SizedBox(
+                width: 520,
+                height: MediaQuery.sizeOf(c).height * 0.45,
+                child: Column(
+                  children: [
+                    TextField(
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: 'Search'),
+                      onChanged: (v) => update(() => search = v),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filtered.length + 1,
+                        itemBuilder: (c, i) => ListTile(
+                          title: Text(
+                            i == 0
+                                ? (isCustomer ? 'All customers' : 'Anyone')
+                                : filtered[i - 1]['Name'].toString(),
+                          ),
+                          subtitle: i > 0 && isCustomer
+                              ? Text(filtered[i - 1]['Code'].toString())
+                              : null,
+                          onTap: () => Navigator.pop(
+                            c,
+                            i == 0 ? '' : filtered[i - 1]['Code'].toString(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (selected != null && mounted)
+        setState(() {
+          if (isCustomer) {
+            customer = selected;
+            sender = '';
+            senderOptions = null;
+          } else {
+            sender = selected;
+          }
+        });
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      pickingFilter = false;
+    }
+  }
+
+  Future<void> chooseDate(bool first) async {
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: (first ? fromDate : toDate) ?? DateTime.now(),
+      firstDate: DateTime(1990),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (selected != null && mounted)
+      setState(() {
+        if (first) {
+          fromDate = selected;
+        } else {
+          toDate = selected;
+        }
+      });
+  }
+
+  Future<void> searchMessages() async {
+    if (fromDate != null && toDate != null && toDate!.isBefore(fromDate!)) {
+      setState(() => error = 'To date must not be before From date.');
+      return;
+    }
+    appliedFilters = {
+      'QBLinkKey': customer,
+      'SenderID': sender,
+      'DateFrom': fromDate == null ? '' : dateText(fromDate),
+      'DateTo': toDate == null ? '' : dateText(toDate),
+    };
+    await load();
+  }
+
+  Future<void> clearFilters() async {
+    setState(() {
+      customer = '';
+      sender = '';
+      fromDate = null;
+      toDate = null;
+      senderOptions = null;
+      appliedFilters = {};
+      error = null;
+    });
+    await load();
+  }
+
+  Widget filters() => ExpansionTile(
+    title: const Text('Message filters'),
+    initiallyExpanded: true,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: LayoutBuilder(
+          builder: (context, size) {
+            final width = size.maxWidth >= 650
+                ? (size.maxWidth - 12) / 2
+                : size.maxWidth;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: width,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : () => chooseFilter(true),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Customer: ${filterLabel(true)}',
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: width,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : () => chooseFilter(false),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'From: ${filterLabel(false)}',
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                          ),
+                        ),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
+                  ),
+                ),
+                OutlinedButton(
+                  onPressed: busy ? null : () => chooseDate(true),
+                  child: Text('From date: ${dateText(fromDate)}'),
+                ),
+                OutlinedButton(
+                  onPressed: busy ? null : () => chooseDate(false),
+                  child: Text('To date: ${dateText(toDate)}'),
+                ),
+                FilledButton(
+                  onPressed: busy ? null : searchMessages,
+                  child: const Text('Search'),
+                ),
+                OutlinedButton(
+                  onPressed: busy ? null : clearFilters,
+                  child: const Text('Clear'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    ],
+  );
   Future<void> open(Map<String, dynamic> row) async {
     try {
       final result = await withPortalLoading(
@@ -113,6 +349,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     ),
     body: Column(
       children: [
+        filters(),
         if (busy)
           const Center(child: PortalLoading(message: 'Loading messages...')),
         if (error != null)

@@ -1,0 +1,63 @@
+Local release: web 1.0.1.42; interface service 30.1.1.23
+
+User Flags
+Select a customer, then a contact. Customer lists load on first use.
+Access Level 2 is required, including when calling the service directly.
+Settings: Access Level, Enable Account, Web View All Dept Tickets,
+Debug Mode, and Do Not Load Tickets On Load.
+Separate buttons reset invalid login count and set/reset a password.
+Password reset writes SHA-256 using the existing Prospect ID/password
+format and clears the plain password. No password or hash is audited.
+Expired Contact is not part of the portal settings.
+Administrators cannot disable or demote their own account here.
+
+Customer ticket permission
+Web View All Dept Tickets accepts T and legacy Y as enabled.
+When off, customers can access only their own tickets. When on, they
+can also access tickets in their own department. Yours stays own tickets.
+The service enforces this on search, CSV export, exact ticket lookup,
+ticket details, documents, activities and ticket-linked messages.
+Employees retain their existing ticket scope.
+Disabling an account blocks its existing interface-service session too.
+
+Activity Audit
+Customer, contact, activity type and date range filters.
+Customer and activity type lists load on first use; contacts load after
+customer selection. Dates are UTC as shown on the screen.
+All contacts for a customer means actions performed by those contacts.
+47 activity types include document uploads/deletion/downloads, messages,
+ticket/activity changes, account changes, login/logout and lookups.
+Type in the activity selector to search the complete list or scroll it.
+Login/logout entries represent portal session events; closing a browser
+without logging out is not a logout event. Publisher delivery is outside
+the portal audit; Queue activity email records the queuing request.
+
+Messages
+Customer, From, From Date, To Date, Search and Clear.
+Filters and their choices use only the logged-in user's received messages.
+Customer is the linked ticket's customer, or the recipient/sender customer
+for a message without a ticket. Sender choices follow the chosen customer.
+Lists load on first opening. Search applies filters; Clear restores inbox.
+Date endpoints are inclusive and use the stored message dates.
+Refresh, returning from a message and Load more keep the applied filters.
+
+Database scripts
+portal-account-actions-prospect.sql / prospect_dev.sql add account audit actions.
+The DEV script also removes the old T/N-only Debug Mode check and NOT NULL.
+portal-audit-labels-prospect.sql / prospect_dev.sql seed all 47 action labels.
+No new constraints were added to account flags.
+
+Compatibility
+Existing REST methods remain available. New methods:
+GetPortalCustomers, GetPortalContacts, UpdatePortalAccount,
+ResetPortalLoginCount, SetPortalPassword, GetPortalCustomerAudit,
+GetFilteredMessages and GetMessageFilterOptions.
+GetUserInfo now includes WEB_VIEW_ALL_DEPT_TICKETS.
+
+Validation
+49 Flutter tests passed, including employee/customer mobile layouts.
+Local API tests covered customer scope with forged parameters, direct
+requests and CSV, password reset/login, disable/enable, audit privacy,
+customer/contact filtering and message filtering/pagination.
+Temporary DEV test account removed; no real user's password was reset.
+Local services use PROSPECT_DEV. Production service/web deployment is separate.

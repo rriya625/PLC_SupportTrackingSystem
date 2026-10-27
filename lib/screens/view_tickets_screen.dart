@@ -564,7 +564,9 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
               Expanded(
                 child: _buildDropdown(
                   'Ticket Type',
-                  ['Yours', 'Department'],
+                  Constants.canViewDepartmentTickets
+                      ? ['Yours', 'Department']
+                      : ['Yours'],
                   ticketType,
                   (val) => setState(() => ticketType = val!),
                 ),

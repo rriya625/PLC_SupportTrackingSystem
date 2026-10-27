@@ -118,6 +118,7 @@ class APIHelper {
     // user's setting into a new login attempt.
     Constants.debugMode = 'N';
     Constants.doNotLoadTicketsOnLoad = 'F';
+    Constants.webViewAllDeptTickets = 'F';
     WebLogHelper.clear();
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
@@ -198,6 +199,8 @@ class APIHelper {
       Constants.debugMode = userData['DEBUG_MODE']?.toString() ?? 'N';
       Constants.doNotLoadTicketsOnLoad =
           userData['DO_NOT_LOAD_TICKETS_ON_LOAD']?.toString() ?? 'F';
+      Constants.webViewAllDeptTickets =
+          userData['WEB_VIEW_ALL_DEPT_TICKETS']?.toString() ?? 'F';
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
       Constants.userType =

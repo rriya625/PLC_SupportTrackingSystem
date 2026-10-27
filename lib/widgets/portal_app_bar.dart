@@ -10,7 +10,11 @@ Future<void> logoutFromPortal(BuildContext context) async {
   if (_loggingOut) return;
   _loggingOut = true;
   try {
-    await withPortalLoading(context, 'Logging out...', () => APIHelper.recordSessionEvent('LOGOUT')); 
+    await withPortalLoading(
+      context,
+      'Logging out...',
+      () => APIHelper.recordSessionEvent('LOGOUT'),
+    );
   } catch (_) {
     // Sign-out must still clear the local session if the server is unavailable.
   }
@@ -25,6 +29,7 @@ Future<void> logoutFromPortal(BuildContext context) async {
   Constants.accessLevel = '';
   Constants.debugMode = 'N';
   Constants.doNotLoadTicketsOnLoad = 'F';
+  Constants.webViewAllDeptTickets = 'F';
   Constants.contactName = '';
   Constants.qbLinkKey = '';
   Constants.emailAddress = '';
