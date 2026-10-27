@@ -7,6 +7,7 @@ class ActivityAttachments extends ChangeNotifier {
   final List<PlatformFile> files = [];
   bool busy = false;
   bool activitySaved = false;
+  bool createdHere = false;
   int historyNumber = 0;
   String? message;
   bool _disposed = false;
@@ -37,6 +38,7 @@ class ActivityAttachments extends ChangeNotifier {
           throw Exception(result['Message'] ?? 'Activity could not be saved.');
         }
         activitySaved = true;
+        createdHere = true;
         historyNumber = activityNumber(result);
       }
       if (files.isNotEmpty && historyNumber <= 0) {
@@ -57,9 +59,9 @@ class ActivityAttachments extends ChangeNotifier {
         notifyListeners();
       }
     } catch (error) {
-      message = activitySaved
+      message = activitySaved && createdHere
           ? 'Activity saved. Some documents were not uploaded. Retry uploads; the activity will not be created again. $error'
-          : error.toString();
+          : 'Document upload failed. Your selected files are kept; please retry. $error';
       rethrow;
     } finally {
       busy = false;

@@ -819,42 +819,49 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                               ),
                             const SizedBox(height: 8),
                             SelectableText(_value(item, const ['LongDesc'])),
-                            TextButton.icon(
-                              style: TextButton.styleFrom(
-                                foregroundColor:
-                                    _documentsFor(number).isNotEmpty
-                                    ? const Color(0xFF1565C0)
-                                    : Colors.grey[700],
-                                textStyle: TextStyle(
-                                  fontWeight: _documentsFor(number).isNotEmpty
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                              icon: const Icon(Icons.folder_open_outlined),
-                              label: const Text('Documents'),
-                              onPressed: number > 0
-                                  ? () => _showDocuments(number)
-                                  : null,
-                            ),
-                            if (Constants.isEmployee)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: Wrap(
-                                  spacing: 8,
-                                  children: [
-                                    if (number > 0 && _flag(item, 'CanEdit'))
-                                      TextButton.icon(
-                                        onPressed: () => _editActivity(item),
-                                        icon: const Icon(Icons.edit),
-                                        label: const Text('Edit'),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                spacing: 8,
+                                children: [
+                                  if (Constants.isEmployee &&
+                                      number > 0 &&
+                                      _flag(item, 'CanEdit'))
+                                    TextButton.icon(
+                                      onPressed: () => _editActivity(item),
+                                      icon: const Icon(Icons.edit),
+                                      label: const Text('Edit'),
+                                    ),
+                                  if (Constants.isEmployee &&
+                                      number > 0 &&
+                                      _flag(item, 'CanDelete'))
+                                    TextButton.icon(
+                                      onPressed: () => _deleteActivity(item),
+                                      icon: const Icon(Icons.delete_outline),
+                                      label: const Text('Delete'),
+                                    ),
+                                  TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      foregroundColor:
+                                          _documentsFor(number).isNotEmpty
+                                          ? const Color(0xFF2E7D32)
+                                          : const Color(0xFF1565C0),
+                                      textStyle: TextStyle(
+                                        fontWeight:
+                                            _documentsFor(number).isNotEmpty
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
                                       ),
-                                    if (number > 0 && _flag(item, 'CanDelete'))
-                                      TextButton.icon(
-                                        onPressed: () => _deleteActivity(item),
-                                        icon: const Icon(Icons.delete_outline),
-                                        label: const Text('Delete'),
-                                      ),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.folder_open_outlined,
+                                    ),
+                                    label: const Text('Documents'),
+                                    onPressed: number > 0
+                                        ? () => _showDocuments(number)
+                                        : null,
+                                  ),
+                                  if (Constants.isEmployee)
                                     TextButton.icon(
                                       onPressed: number > 0
                                           ? () => _sendEmail(item)
@@ -862,9 +869,9 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                                       icon: const Icon(Icons.email_outlined),
                                       label: const Text('Send email'),
                                     ),
-                                  ],
-                                ),
+                                ],
                               ),
+                            ),
                           ],
                         ),
                       ),

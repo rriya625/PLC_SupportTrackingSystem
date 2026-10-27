@@ -36,8 +36,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.widgetWithText(TextButton, 'Documents'), findsNWidgets(2));
       final buttons = tester.widgetList<TextButton>(find.widgetWithText(TextButton, 'Documents')).toList();
-      expect(buttons.first.style!.foregroundColor!.resolve({}), const Color(0xFF1565C0));
-      expect(buttons.last.style!.foregroundColor!.resolve({}), Colors.grey[700]);
+      expect(buttons.first.style!.foregroundColor!.resolve({}), const Color(0xFF2E7D32));
+      expect(buttons.last.style!.foregroundColor!.resolve({}), const Color(0xFF1565C0));
       await tester.tap(find.widgetWithText(TextButton, 'Documents').first);
       await tester.pumpAndSettle();
       expect(find.text('Activity Documents'), findsOneWidget);
