@@ -105,7 +105,7 @@ class Constants {
         logUploadUrl = map['LOG_UPLOAD_URL']?.toString();
         hostEnv = map['HOST_ENV']?.toString();
         manualDownloadUrl = map['MANUAL_DOWNLOAD_URL']?.toString();
-        appBuildVersion = map['BUILD_VERSION']?.toString() ?? appBuildVersion;
+        // Display the version of the running code, not a newer server config.
 
         print('logUploadUrl: $logUploadUrl');
         print('hostEnv: $hostEnv');

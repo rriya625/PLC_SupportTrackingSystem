@@ -13,5 +13,8 @@ try {
   $config | ConvertTo-Json | Set-Content build/web/config.json -Encoding utf8
   $index=Join-Path $project 'build/web/index.html'
   [IO.File]::WriteAllText($index,([IO.File]::ReadAllText($index).Replace('__APP_VERSION__',$version)))
+  $bootstrap=Join-Path $project 'build/web/flutter_bootstrap.js'
+  [IO.File]::WriteAllText($bootstrap,([IO.File]::ReadAllText($bootstrap).Replace('__APP_VERSION__',$version)))
+  Copy-Item build/web/main.dart.js "build/web/main.$version.dart.js" -Force
   Write-Output "Built $Environment $version with matching footer/config metadata."
 } finally {Pop-Location}
