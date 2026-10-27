@@ -17,6 +17,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
   List<Map<String, dynamic>> users = [], types = [], rows = [];
   List<Map<String, dynamic>> customers = [];
   String? customer;
+  int customerPickerGeneration = 0;
   bool get customerLocked => !Constants.isEmployee;
   bool contactsLoading = false,
       customersLoading = false,
@@ -493,6 +494,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                     onPointerDown: (_) => loadCustomers(),
                     child: LayoutBuilder(
                       builder: (context, size) => DropdownMenu<String>(
+                        key: ValueKey(customerPickerGeneration),
                         controller: customerSearch,
                         focusNode: customerFocus,
                         requestFocusOnTap: true,
@@ -503,13 +505,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         enableSearch: true,
                         enabled: !busy && !customerLocked,
                         dropdownMenuEntries: customers
-                            .where(
-                              (c) =>
-                                  customerSearch.text.isEmpty ||
-                                  customerLabel(c).toLowerCase().contains(
-                                    customerSearch.text.toLowerCase(),
-                                  ),
-                            )
                             .map(
                               (c) => DropdownMenuEntry(
                                 value: c['CODE'].toString(),
@@ -570,8 +565,13 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                       onPressed: busy
                           ? null
                           : () {
+                              customerFocus.unfocus();
                               customerSearch.clear();
+                              customerPickerGeneration++;
                               selectCustomer(null);
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (mounted) customerFocus.requestFocus();
+                              });
                             },
                       child: const Text('All customers'),
                     ),
@@ -661,7 +661,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         : (v) => setState(() => access = v!),
                   ),
                   SwitchListTile(
-                    title: const Text('Allow this user to sign in'),
+                    title: const Text('Enable portal account'),
                     value: enabled,
                     onChanged:
                         user == null ||
@@ -710,7 +710,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         : (v) => setState(() => deleteAllowed = v),
                   ),
                   SwitchListTile(
-                    title: const Text('Record diagnostic logs'),
+                    title: const Text('Review diagnostic logs'),
                     value: debug,
                     onChanged: user == null || busy
                         ? null
@@ -719,7 +719,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                   SwitchListTile(
                     title: const Text('Wait for Search before loading tickets'),
                     subtitle: const Text(
-                      'Open the filters and wait for Search.',
+                      'Search Filter will be open and click Search to load tickets.',
                     ),
                     value: skip,
                     onChanged: user == null || busy

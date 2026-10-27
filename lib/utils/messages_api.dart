@@ -53,6 +53,9 @@ class MessagesApi {
     return Map<String, dynamic>.from(data);
   }
 
+  Future<Map<String, dynamic>?> ticketDetails(String key) =>
+      APIHelper.fetchTicketDetails(key);
+
   Future<List<String>> groups() async {
     await APIHelper.ensureValidToken();
     final response = await diagnosticHttpClient.get(

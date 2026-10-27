@@ -153,6 +153,17 @@ void main() {
     expect(api.calls, contains('GetPortalAuditTypes'));
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
+    await tester.tap(find.text('All customers'));
+    await tester.pumpAndSettle();
+    final customerField = find.descendant(
+      of: find.byType(DropdownMenu<String>).first,
+      matching: find.byType(TextField),
+    );
+    await tester.tap(customerField);
+    await tester.enterText(customerField, 'QBPLC');
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(customerField).controller!.text, 'QBPLC');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     expect(api.calls, isNot(contains('GetPortalCustomerAudit')));
     await tester.tap(find.text('Search'));
     await tester.pumpAndSettle();

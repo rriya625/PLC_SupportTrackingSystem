@@ -1,3 +1,5 @@
+import '../widgets/activity_attachments.dart';
+import '../widgets/ticket_update_attachments.dart';
 import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
 import 'package:ticket_tracker_app/screens/document_gallery.dart';
@@ -1238,6 +1240,7 @@ class _TicketDescriptionScreenState
     final shortEdit = TextEditingController(text: shortDescription);
     final longEdit = TextEditingController(text: longDescription);
     bool saving = false;
+    final attachments = TicketUpdateAttachments();
     // Controllers
     final customerRefController = TextEditingController(
       text: currentCustomerRef,
@@ -1254,163 +1257,191 @@ class _TicketDescriptionScreenState
 
     await showDialog(
       context: parentContext,
-      builder: (dialogContext) {
-        // ✅ Request focus once the dialog has been built
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          customerRefFocusNode.requestFocus();
-        });
-
-        Widget dialogContent = Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_canEditDescription) ...[
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, updateDialog) {
+          Widget dialogContent = Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_canEditDescription) ...[
+                TextField(
+                  controller: shortEdit,
+                  maxLength: 250,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: longEdit,
+                  minLines: 5,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    labelText: 'Details',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextField(
-                controller: shortEdit,
+                controller: customerRefController,
+                focusNode: customerRefFocusNode, // ✅ Attach focus node
+                maxLength: 20,
+                decoration: const InputDecoration(
+                  labelText: 'Customer Reference',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: sharepointLinkController,
                 maxLength: 250,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: 'Sharepoint Link'),
               ),
               const SizedBox(height: 12),
               TextField(
-                controller: longEdit,
-                minLines: 5,
-                maxLines: 10,
+                controller: sendConfirmationController,
+                maxLength: 50,
                 decoration: const InputDecoration(
-                  labelText: 'Details',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
+                  labelText: 'Send Confirmation To',
                 ),
               ),
               const SizedBox(height: 12),
+              ActivityAttachmentPicker(draft: attachments),
+              if (saving)
+                const PortalLoading(message: 'Saving ticket and documents...'),
             ],
-            TextField(
-              controller: customerRefController,
-              focusNode: customerRefFocusNode, // ✅ Attach focus node
-              maxLength: 20,
-              decoration: const InputDecoration(
-                labelText: 'Customer Reference',
+          );
+
+          return PopScope(
+            canPop: !saving,
+            child: AlertDialog(
+              title: const Text('Update Ticket'),
+              content: SingleChildScrollView(
+                child: kIsWeb
+                    ? SizedBox(width: 400, child: dialogContent)
+                    : dialogContent,
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: sharepointLinkController,
-              maxLength: 250,
-              decoration: const InputDecoration(labelText: 'Sharepoint Link'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: sendConfirmationController,
-              maxLength: 50,
-              decoration: const InputDecoration(
-                labelText: 'Send Confirmation To',
-              ),
-            ),
-          ],
-        );
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.blue[800],
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          if (saving) return;
+                          final updatedCustomerRef = customerRefController.text
+                              .trim();
+                          final updatedSharepointLink = sharepointLinkController
+                              .text
+                              .trim();
+                          final updatedSendConfirmationTo =
+                              sendConfirmationController.text.trim();
 
-        return AlertDialog(
-          title: const Text('Update Ticket'),
-          content: SingleChildScrollView(
-            child: kIsWeb
-                ? SizedBox(width: 400, child: dialogContent)
-                : dialogContent,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
+                          try {
+                            updateDialog(() => saving = true);
+                            attachments.busy = true;
+                            attachments.changed();
+                            if (_canEditDescription &&
+                                (shortEdit.text.trim() != shortDescription ||
+                                    longEdit.text.trim() != longDescription)) {
+                              await APIHelper.updateTicketDescription(
+                                ticketKey: ticketKey,
+                                shortDesc: shortEdit.text.trim(),
+                                longDesc: longEdit.text.trim(),
+                                expectedShortDesc: _originalShortDescription,
+                                expectedLongDesc: _originalRawLongDescription,
+                              );
+                              _originalShortDescription = shortEdit.text.trim();
+                              _originalRawLongDescription = longEdit.text
+                                  .trim();
+                              shortDescription = shortEdit.text.trim();
+                              longDescription = longEdit.text.trim();
+                            }
+                            final result = await APIHelper.updateTicket(
+                              ticketKey,
+                              updatedCustomerRef,
+                              updatedSharepointLink,
+                              updatedSendConfirmationTo, // 🔹 include in API call
+                            );
+
+                            if (result['Code'] == 300) {
+                              await attachments.upload(ticketKey);
+                              updateDialog(() => saving = false);
+                              Navigator.of(
+                                dialogContext,
+                              ).pop(); // ✅ Close dialog
+
+                              final updatedData =
+                                  await APIHelper.fetchTicketDetails(
+                                    ticketKey.toString(),
+                                  );
+                              if (updatedData != null &&
+                                  parentContext.mounted) {
+                                setState(() {
+                                  ticketNumber = updatedData['TicketKey'] ?? '';
+                                  dateCreated = updatedData['StartDate'] ?? '';
+                                  assignedTo =
+                                      updatedData['EmployeeName'] ?? 'N/A';
+                                  currentStatus = _statusDisplay(
+                                    updatedData['Status'],
+                                  );
+                                  shortDescription =
+                                      updatedData['ShortDesc'] ?? '';
+                                  longDescription = _parseRtf(
+                                    updatedData['LongDesc'] ?? '',
+                                  );
+                                  customerReference =
+                                      updatedData['CustomerReference'] ?? '';
+                                  sharepointLink =
+                                      updatedData['SharepointLink'] ?? '';
+                                  sendConfirmationTo =
+                                      updatedData['ConfirmationEmailTo'] ?? '';
+                                });
+                              }
+
+                              await showMessageDialog(
+                                parentContext,
+                                'Successfully Updated',
+                              );
+                            } else {
+                              await showMessageDialog(
+                                parentContext,
+                                'Update failed: ${result['Message']}',
+                              );
+                            }
+                          } catch (e) {
+                            await showMessageDialog(
+                              parentContext,
+                              'Unable to complete all changes: $e. Any description already saved is retained; you can retry the remaining fields.',
+                            );
+                          } finally {
+                            attachments.busy = false;
+                            attachments.changed();
+                            if (dialogContext.mounted)
+                              updateDialog(() => saving = false);
+                          }
+                        },
+                  child: const Text('Submit'),
+                ),
+              ],
             ),
-            ElevatedButton(
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.blue[800],
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                if (saving) return;
-                final updatedCustomerRef = customerRefController.text.trim();
-                final updatedSharepointLink = sharepointLinkController.text
-                    .trim();
-                final updatedSendConfirmationTo = sendConfirmationController
-                    .text
-                    .trim();
-
-                try {
-                  saving = true;
-                  if (_canEditDescription &&
-                      (shortEdit.text.trim() != shortDescription ||
-                          longEdit.text.trim() != longDescription)) {
-                    await APIHelper.updateTicketDescription(
-                      ticketKey: ticketKey,
-                      shortDesc: shortEdit.text.trim(),
-                      longDesc: longEdit.text.trim(),
-                      expectedShortDesc: _originalShortDescription,
-                      expectedLongDesc: _originalRawLongDescription,
-                    );
-                    _originalShortDescription = shortEdit.text.trim();
-                    _originalRawLongDescription = longEdit.text.trim();
-                    shortDescription = shortEdit.text.trim();
-                    longDescription = longEdit.text.trim();
-                  }
-                  final result = await APIHelper.updateTicket(
-                    ticketKey,
-                    updatedCustomerRef,
-                    updatedSharepointLink,
-                    updatedSendConfirmationTo, // 🔹 include in API call
-                  );
-
-                  if (result['Code'] == 300) {
-                    Navigator.of(dialogContext).pop(); // ✅ Close dialog
-
-                    final updatedData = await APIHelper.fetchTicketDetails(
-                      ticketKey.toString(),
-                    );
-                    if (updatedData != null && parentContext.mounted) {
-                      setState(() {
-                        ticketNumber = updatedData['TicketKey'] ?? '';
-                        dateCreated = updatedData['StartDate'] ?? '';
-                        assignedTo = updatedData['EmployeeName'] ?? 'N/A';
-                        currentStatus = _statusDisplay(updatedData['Status']);
-                        shortDescription = updatedData['ShortDesc'] ?? '';
-                        longDescription = _parseRtf(
-                          updatedData['LongDesc'] ?? '',
-                        );
-                        customerReference =
-                            updatedData['CustomerReference'] ?? '';
-                        sharepointLink = updatedData['SharepointLink'] ?? '';
-                        sendConfirmationTo =
-                            updatedData['ConfirmationEmailTo'] ?? '';
-                      });
-                    }
-
-                    await showMessageDialog(
-                      parentContext,
-                      'Successfully Updated',
-                    );
-                  } else {
-                    await showMessageDialog(
-                      parentContext,
-                      'Update failed: ${result['Message']}',
-                    );
-                  }
-                } catch (e) {
-                  await showMessageDialog(
-                    parentContext,
-                    'Unable to complete all changes: $e. Any description already saved is retained; you can retry the remaining fields.',
-                  );
-                } finally {
-                  saving = false;
-                }
-              },
-              child: const Text('Submit'),
-            ),
-          ],
-        );
-      },
+          );
+        },
+      ),
     );
 
     // ✅ Clean up controllers & focus node after dialog closes
+    attachments.dispose();
     shortEdit.dispose();
     longEdit.dispose();
     customerRefController.dispose();

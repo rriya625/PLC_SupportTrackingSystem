@@ -1,4 +1,4 @@
-Local release: web 1.0.1.44; interface service 30.1.1.27
+Local release: web 1.0.1.45; interface service 30.1.1.28
 
 User Flags
 Select a customer, then a contact. Customer lists load on first use.
@@ -82,3 +82,14 @@ linked to the selected QB Link Key. Customer administrators are locked
 to their own customer. The service applies this restriction to lookups,
 audit searches, settings changes, password resets and login-count resets.
 Access Level 2 remains required. Contact changes clear the old selection.
+
+Tester review changes
+Messages > New message: Customer and Contact are separate searchable
+choices. Contact choices belong to the selected customer. Linked tickets
+show their number and short description. Ticket and Message History
+Send Message screens are unchanged.
+Update Ticket includes Attach Documents. Submit saves ticket changes and
+uploads the selected files to customer uploads. Failed files stay selected;
+a retry skips files already uploaded successfully.
+User Flags uses Enable portal account and Review diagnostic logs labels.
+Activity Audit customer search works again after All customers is clicked.

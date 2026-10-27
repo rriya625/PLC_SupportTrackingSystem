@@ -55,6 +55,24 @@ class FakeMessages extends MessagesApi {
         'Data': {...row, 'Unread': false},
       };
     if (endpoint == 'DeletePortalMessage') deleted = true;
+    if (endpoint == 'GetMessageRecipients' &&
+        query?['RecipientType'] == 'CUSTOMER_LIST')
+      return {
+        'Code': 300,
+        'Data': [
+          {'ID': 'QB879', 'Name': 'QB879 - Illinois State Police'},
+        ],
+      };
+    if (endpoint == 'GetMessageRecipients' &&
+        query?['RecipientType'] == 'CUSTOMER_CONTACT') {
+      lastQuery = query;
+      return {
+        'Code': 300,
+        'Data': [
+          {'ID': '20068', 'Name': '20068 - Clifford'},
+        ],
+      };
+    }
     if (endpoint == 'GetMessageRecipients')
       return {
         'Code': 300,
@@ -197,7 +215,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.calls.where((e) => e == 'GetMessages').length, 2);
   });
-  testWidgets('Customer recipient search stays selected after debounce', (
+  testWidgets('Customer compose searches customer then its contacts', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1000, 1400);
@@ -210,27 +228,33 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Customer'));
     await tester.pumpAndSettle();
-    final picker = find.descendant(
-      of: find.byType(DropdownMenu<String>),
+    final customerField = find.descendant(
+      of: find.byType(DropdownMenu<String>).first,
       matching: find.byType(TextField),
     );
-    await tester.tap(picker);
-    await tester.enterText(picker, 'Mu');
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(customerField);
+    await tester.enterText(customerField, 'QB879');
     await tester.pumpAndSettle();
-    final editor = find.descendant(
-      of: picker,
-      matching: find.byType(EditableText),
+    await tester.tap(find.text('QB879 - Illinois State Police').last);
+    await tester.pumpAndSettle();
+    expect(api.lastQuery, {
+      'RecipientType': 'CUSTOMER_CONTACT',
+      'Search': 'QB879',
+    });
+    final contactField = find.descendant(
+      of: find.byType(DropdownMenu<String>).last,
+      matching: find.byType(TextField),
     );
-    expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
-    await tester.tap(find.text('Murugan').last);
+    await tester.tap(contactField);
+    await tester.enterText(contactField, 'Cliff');
     await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('20068 - Clifford').last);
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).last, 'Test reply');
+    await tester.enterText(find.byType(TextField).last, 'Compose test');
     await tester.ensureVisible(find.text('Submit'));
     await tester.tap(find.text('Submit'));
     await tester.pumpAndSettle();
-    expect(api.sentBody?['RecipientID'], 'MURU');
+    expect(api.sentBody?['RecipientID'], '20068');
+    expect(api.sentBody?['RecipientType'], 'CUSTOMER');
   });
 }

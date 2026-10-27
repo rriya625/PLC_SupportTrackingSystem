@@ -540,7 +540,11 @@ class MessageComposeScreen extends StatefulWidget {
 }
 
 class _MessageComposeScreenState extends State<MessageComposeScreen> {
-  Timer? recipientDebounce;
+  Timer? ticketDebounce;
+  final customerSearch = TextEditingController();
+  String? selectedCustomer, ticketDescription;
+  List<Map<String, String>> customers = [];
+  bool ticketLoading = false;
   final text = TextEditingController(),
       ticket = TextEditingController(),
       search = TextEditingController();
@@ -553,28 +557,109 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
   void initState() {
     super.initState();
     search.addListener(() {
-      if (kind != 'CUSTOMER') return;
-      recipientDebounce?.cancel();
-      recipientDebounce = Timer(const Duration(milliseconds: 300), () {
-        if (!mounted || kind != 'CUSTOMER') return;
-        if (recipient != null &&
-            options.any(
-              (o) => o['ID'] == recipient && o['Name'] == search.text,
-            ))
-          return;
-        find();
-      });
+      if (kind == 'CUSTOMER' &&
+          recipient != null &&
+          !options.any(
+            (o) => o['ID'] == recipient && o['Name'] == search.text,
+          )) {
+        setState(() => recipient = null);
+      }
     });
+    customerSearch.addListener(() {
+      if (selectedCustomer != null &&
+          !customers.any(
+            (c) =>
+                c['ID'] == selectedCustomer && c['Name'] == customerSearch.text,
+          )) {
+        setState(() {
+          selectedCustomer = null;
+          recipient = null;
+          options = [];
+          search.clear();
+        });
+      }
+    });
+    ticket.addListener(() {
+      ticketDebounce?.cancel();
+      setState(() {
+        ticketDescription = null;
+        ticketLoading = false;
+      });
+      ticketDebounce = Timer(const Duration(milliseconds: 600), loadTicket);
+    });
+    final linkedTicket = widget.reply?['TicketKey']?.toString() ?? '';
+    if (linkedTicket.isNotEmpty && linkedTicket != '0')
+      ticket.text = linkedTicket;
     if (widget.reply == null) loadGroups();
   }
 
   @override
   void dispose() {
-    recipientDebounce?.cancel();
+    ticketDebounce?.cancel();
+    customerSearch.dispose();
     text.dispose();
     ticket.dispose();
     search.dispose();
     super.dispose();
+  }
+
+  Future<void> loadTicket() async {
+    final key = ticket.text.trim();
+    if (int.tryParse(key) == null || int.parse(key) <= 0) return;
+    setState(() => ticketLoading = true);
+    try {
+      final details = await widget.api.ticketDetails(key);
+      if (mounted && ticket.text.trim() == key)
+        setState(
+          () => ticketDescription =
+              details?['ShortDesc']?.toString() ?? 'Ticket unavailable',
+        );
+    } catch (_) {
+      if (mounted && ticket.text.trim() == key)
+        setState(() => ticketDescription = 'Ticket unavailable');
+    } finally {
+      if (mounted && ticket.text.trim() == key)
+        setState(() => ticketLoading = false);
+    }
+  }
+
+  Future<void> loadCustomers() async {
+    final generation = ++searchGeneration;
+    setState(() {
+      searching = true;
+      options = [];
+      recipient = null;
+    });
+    try {
+      final result = await widget.api.call(
+        'GetMessageRecipients',
+        query: {'RecipientType': 'CUSTOMER_LIST', 'Search': ''},
+      );
+      if (!mounted || generation != searchGeneration) return;
+      setState(
+        () => customers = (result['Data'] as List)
+            .map(
+              (e) => {'ID': e['ID'].toString(), 'Name': e['Name'].toString()},
+            )
+            .toList(),
+      );
+    } catch (e) {
+      if (mounted && generation == searchGeneration)
+        setState(() => error = e.toString());
+    } finally {
+      if (mounted && generation == searchGeneration)
+        setState(() => searching = false);
+    }
+  }
+
+  Future<void> chooseCustomer(String? code) async {
+    setState(() {
+      selectedCustomer = code;
+      recipient = null;
+      options = [];
+      search.clear();
+    });
+    if (code != null) await find();
   }
 
   Future<void> loadGroups() async {
@@ -606,7 +691,12 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
     try {
       final result = await widget.api.call(
         'GetMessageRecipients',
-        query: {'RecipientType': kind, 'Search': search.text.trim()},
+        query: {
+          'RecipientType': kind == 'CUSTOMER' ? 'CUSTOMER_CONTACT' : kind,
+          'Search': kind == 'CUSTOMER'
+              ? (selectedCustomer ?? '')
+              : search.text.trim(),
+        },
       );
       if (!mounted || generation != searchGeneration) return;
       setState(
@@ -714,6 +804,10 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
                             });
                             if (kind == 'GROUP') {
                               loadGroups();
+                            } else if (kind == 'CUSTOMER') {
+                              selectedCustomer = null;
+                              customerSearch.clear();
+                              loadCustomers();
                             } else {
                               find();
                             }
@@ -723,19 +817,46 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
               const SizedBox(height: 12),
               if (searching && kind != 'GROUP')
                 const PortalLoading(message: 'Loading recipients...'),
+              if (kind == 'CUSTOMER') ...[
+                LayoutBuilder(
+                  builder: (context, constraints) => DropdownMenu<String>(
+                    controller: customerSearch,
+                    width: constraints.maxWidth,
+                    menuHeight: 280,
+                    requestFocusOnTap: true,
+                    enableFilter: true,
+                    enableSearch: true,
+                    label: const Text('Select customer'),
+                    enabled: !busy && !searching,
+                    dropdownMenuEntries: customers
+                        .map(
+                          (c) => DropdownMenuEntry(
+                            value: c['ID']!,
+                            label: c['Name']!,
+                          ),
+                        )
+                        .toList(),
+                    onSelected: chooseCustomer,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               LayoutBuilder(
                 builder: (context, constraints) => DropdownMenu<String>(
                   key: ValueKey(kind),
                   controller: kind == 'CUSTOMER' ? search : null,
                   width: constraints.maxWidth,
                   initialSelection: recipient,
-                  enabled: !busy,
-                  enableFilter: kind != 'CUSTOMER',
+                  enabled:
+                      !busy &&
+                      !searching &&
+                      (kind != 'CUSTOMER' || selectedCustomer != null),
+                  enableFilter: true,
                   enableSearch: true,
                   requestFocusOnTap: true,
-                  label: const Text('To'),
+                  label: Text(kind == 'CUSTOMER' ? 'Select contact' : 'To'),
                   helperText: kind == 'CUSTOMER'
-                      ? 'Type to search customers by name, ID or department.'
+                      ? 'Search contacts for the selected customer.'
                       : null,
                   dropdownMenuEntries: options
                       .map(
@@ -757,6 +878,15 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
                 ),
               ),
             ],
+            if (ticketLoading)
+              const PortalLoading(message: 'Loading ticket...'),
+            if (ticketDescription != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  'Ticket #${ticket.text.trim()} - $ticketDescription',
+                ),
+              ),
             const SizedBox(height: 16),
             TextField(
               controller: text,
