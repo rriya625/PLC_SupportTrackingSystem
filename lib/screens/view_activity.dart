@@ -1,4 +1,5 @@
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
+import 'package:ticket_tracker_app/widgets/activity_attachments.dart';
 import 'package:ticket_tracker_app/utils/document_download_helper.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/utils/ticket_email.dart';
@@ -89,28 +90,48 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
       .toList();
 
   Future<void> _showDocuments(int number) async {
+    final activity = activityData.firstWhere(
+      (a) => _historyNumber(a) == number,
+      orElse: () => {},
+    );
+    final canUpload = Constants.isEmployee
+        ? _flag(activity, 'CanEdit')
+        : activity['EnteredByID']?.toString().toUpperCase() == 'WEB' &&
+              int.tryParse(activity['ProspectKey']?.toString() ?? '') ==
+                  Constants.userID;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text('Activity #$number documents'),
+        title: const Text('Activity Documents'),
         content: SizedBox(
           width: 600,
           height: 360,
           child: ListView(
-            children: _documentsFor(number)
-                .map(
-                  (d) => ListTile(
-                    leading: const Icon(Icons.insert_drive_file_outlined),
-                    title: Text(d['FileName'].toString()),
-                    trailing: const Icon(Icons.open_in_new),
-                    onTap: () => _openDocument(d),
-                  ),
-                )
-                .toList(),
+            children: _documentsFor(number).isEmpty
+                ? [const ListTile(title: Text('No documents attached.'))]
+                : _documentsFor(number)
+                      .map(
+                        (d) => ListTile(
+                          leading: const Icon(Icons.insert_drive_file_outlined),
+                          title: Text(d['FileName'].toString()),
+                          trailing: const Icon(Icons.open_in_new),
+                          onTap: () => _openDocument(d),
+                        ),
+                      )
+                      .toList(),
           ),
         ),
         actions: [
+          if (canUpload)
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                await _attachToActivity(number);
+              },
+              icon: const Icon(Icons.attach_file),
+              label: const Text('Attach Documents'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Close'),
@@ -164,6 +185,60 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     } catch (error) {
       if (mounted) _showError(error);
     }
+  }
+
+  Future<void> _attachToActivity(int number) async {
+    final draft = ActivityAttachments()
+      ..activitySaved = true
+      ..historyNumber = number;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (c) => ListenableBuilder(
+        listenable: draft,
+        builder: (context, _) => PopScope(
+          canPop: !draft.busy,
+          child: AlertDialog(
+            title: const Text('Attach Activity Documents'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'You can attach files to activities you created.',
+                    ),
+                    ActivityAttachmentPicker(draft: draft),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: draft.busy ? null : () => Navigator.pop(c),
+                child: const Text('Close'),
+              ),
+              FilledButton(
+                onPressed: draft.busy || draft.files.isEmpty
+                    ? null
+                    : () async {
+                        try {
+                          await draft.save(_ticketKey, () async => {});
+                          if (c.mounted) Navigator.pop(c);
+                        } catch (_) {
+                          /* Draft displays the failure and retains remaining files. */
+                        }
+                      },
+                child: Text(draft.busy ? 'Uploading...' : 'Save Documents'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    draft.dispose();
+    await _load();
   }
 
   String _value(Map<String, dynamic> item, List<String> keys) {
@@ -230,114 +305,131 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     bool critical = false;
     bool webPosting = false;
     bool submitting = false;
+    final attachments = ActivityAttachments();
     final controller = TextEditingController();
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create Employee Activity'),
-          content: SizedBox(
-            width: 520,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _optionDropdown('Activity Type', types, type, (value) {
-                    setDialogState(() => type = value);
-                  }),
-                  const SizedBox(height: 12),
-                  _optionDropdown('Status', statuses, status, (value) {
-                    setDialogState(() => status = value);
-                  }),
-                  const SizedBox(height: 12),
-                  _optionDropdown('Priority', priorities, priority, (value) {
-                    setDialogState(() => priority = value);
-                  }),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: controller,
-                    maxLines: 7,
-                    maxLength: 4000,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      border: OutlineInputBorder(),
+        builder: (context, setDialogState) => PopScope(
+          canPop: !submitting,
+          child: AlertDialog(
+            title: const Text('Create Employee Activity'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _optionDropdown('Activity Type', types, type, (value) {
+                      setDialogState(() => type = value);
+                    }),
+                    const SizedBox(height: 12),
+                    _optionDropdown('Status', statuses, status, (value) {
+                      setDialogState(() => status = value);
+                    }),
+                    const SizedBox(height: 12),
+                    _optionDropdown('Priority', priorities, priority, (value) {
+                      setDialogState(() => priority = value);
+                    }),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: controller,
+                      enabled: !submitting && !attachments.activitySaved,
+                      maxLines: 7,
+                      maxLength: 4000,
+                      decoration: const InputDecoration(
+                        labelText: 'Description',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: critical,
-                    onChanged: (value) =>
-                        setDialogState(() => critical = value ?? false),
-                    title: const Text('Critical'),
-                  ),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    value: webPosting,
-                    onChanged: (value) =>
-                        setDialogState(() => webPosting = value ?? false),
-                    title: const Text('Visible to customer'),
-                    subtitle: const Text(
-                      'Off keeps this activity internal. Saving never sends email.',
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: critical,
+                      onChanged: (value) =>
+                          setDialogState(() => critical = value ?? false),
+                      title: const Text('Critical'),
                     ),
-                  ),
-                ],
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: webPosting,
+                      onChanged: (value) =>
+                          setDialogState(() => webPosting = value ?? false),
+                      title: const Text('Visible to customer'),
+                      subtitle: const Text(
+                        'Off keeps this activity internal. Saving never sends email.',
+                      ),
+                    ),
+                    ActivityAttachmentPicker(draft: attachments),
+                  ],
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                onPressed: submitting
+                    ? null
+                    : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: submitting
+                    ? null
+                    : () async {
+                        if (controller.text.trim().isEmpty ||
+                            type == null ||
+                            status == null ||
+                            priority == null) {
+                          _showError(
+                            const ApiException(
+                              400,
+                              'Complete all required fields.',
+                            ),
+                          );
+                          return;
+                        }
+                        setDialogState(() => submitting = true);
+                        try {
+                          await attachments.save(
+                            _ticketKey,
+                            () => APIHelper.createEmployeeActivity(
+                              ticketKey: _ticketKey,
+                              longDesc: controller.text.trim(),
+                              activityType: type!,
+                              status: status!,
+                              priority: priority!,
+                              critical: critical,
+                              webPosting: webPosting,
+                            ),
+                          );
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          await _load();
+                        } catch (error) {
+                          if (mounted) _showError(error);
+                          if (dialogContext.mounted)
+                            setDialogState(() => submitting = false);
+                        }
+                      },
+                child: submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(
+                        attachments.activitySaved ? 'Retry Uploads' : 'Save',
+                      ),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: submitting
-                  ? null
-                  : () async {
-                      if (controller.text.trim().isEmpty ||
-                          type == null ||
-                          status == null ||
-                          priority == null) {
-                        _showError(
-                          const ApiException(
-                            400,
-                            'Complete all required fields.',
-                          ),
-                        );
-                        return;
-                      }
-                      setDialogState(() => submitting = true);
-                      try {
-                        await APIHelper.createEmployeeActivity(
-                          ticketKey: _ticketKey,
-                          longDesc: controller.text.trim(),
-                          activityType: type!,
-                          status: status!,
-                          priority: priority!,
-                          critical: critical,
-                          webPosting: webPosting,
-                        );
-                        if (!dialogContext.mounted) return;
-                        Navigator.pop(dialogContext);
-                        await _load();
-                      } catch (error) {
-                        if (mounted) _showError(error);
-                        setDialogState(() => submitting = false);
-                      }
-                    },
-              child: submitting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
     controller.dispose();
+    attachments.dispose();
+    if (mounted) await _load();
   }
 
   Widget _optionDropdown(
@@ -366,74 +458,109 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
 
   Future<void> _showLegacyCreateDialog() async {
     final controller = TextEditingController();
+    final attachments = ActivityAttachments();
     bool critical = false;
+    bool submitting = false;
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Create Activity'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Message',
-                  border: OutlineInputBorder(),
-                ),
+        builder: (context, setDialogState) => PopScope(
+          canPop: !submitting,
+          child: AlertDialog(
+            title: const Text('Create Activity'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: controller,
+                    enabled: !submitting && !attachments.activitySaved,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Message',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    value: critical,
+                    onChanged: (value) =>
+                        setDialogState(() => critical = value ?? false),
+                    title: const Text('Critical'),
+                  ),
+                  ActivityAttachmentPicker(draft: attachments),
+                ],
               ),
-              CheckboxListTile(
-                value: critical,
-                onChanged: (value) =>
-                    setDialogState(() => critical = value ?? false),
-                title: const Text('Critical'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: submitting
+                    ? null
+                    : () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: submitting
+                    ? null
+                    : () async {
+                        if (controller.text.trim().isEmpty) return;
+                        setDialogState(() => submitting = true);
+                        try {
+                          await attachments.save(_ticketKey, () async {
+                            final response = await diagnosticHttpClient.post(
+                              Uri.parse(
+                                '${Constants.baseUrlData}CreateActivity',
+                              ),
+                              headers: {
+                                'Authorization':
+                                    'Bearer ${Constants.accessToken}',
+                                'Content-Type': 'application/json',
+                              },
+                              body: jsonEncode({
+                                'TicketKey': _ticketKey,
+                                'ProspectKey': Constants.userID,
+                                'LongDesc': controller.text.trim(),
+                                'Priority': '5',
+                                'Critical': critical ? 'T' : 'F',
+                              }),
+                            );
+                            if (response.statusCode < 200 ||
+                                response.statusCode >= 300) {
+                              throw ApiException(
+                                response.statusCode,
+                                'Failed to create activity.',
+                              );
+                            }
+                            return Map<String, dynamic>.from(
+                              jsonDecode(response.body) as Map,
+                            );
+                          });
+                          if (!dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          await _load();
+                        } catch (error) {
+                          if (mounted) _showError(error);
+                          if (dialogContext.mounted) {
+                            setDialogState(() => submitting = false);
+                          }
+                        }
+                      },
+                child: Text(
+                  submitting
+                      ? 'Saving...'
+                      : attachments.activitySaved
+                      ? 'Retry Uploads'
+                      : 'Save',
+                ),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                if (controller.text.trim().isEmpty) return;
-                try {
-                  final response = await diagnosticHttpClient.post(
-                    Uri.parse('${Constants.baseUrlData}CreateActivity'),
-                    headers: {
-                      'Authorization': 'Bearer ${Constants.accessToken}',
-                      'Content-Type': 'application/json',
-                    },
-                    body: jsonEncode({
-                      'TicketKey': _ticketKey,
-                      'ProspectKey': Constants.userID,
-                      'LongDesc': controller.text.trim(),
-                      'Priority': '5',
-                      'Critical': critical ? 'T' : 'F',
-                    }),
-                  );
-                  if (response.statusCode < 200 || response.statusCode >= 300) {
-                    throw ApiException(
-                      response.statusCode,
-                      'Failed to create activity.',
-                    );
-                  }
-                  if (!dialogContext.mounted) return;
-                  Navigator.pop(dialogContext);
-                  await _load();
-                } catch (error) {
-                  if (mounted) _showError(error);
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
         ),
       ),
     );
     controller.dispose();
+    attachments.dispose();
+    if (mounted) await _load();
   }
 
   Future<void> _editActivity(Map<String, dynamic> item) async {
@@ -692,12 +819,24 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                               ),
                             const SizedBox(height: 8),
                             SelectableText(_value(item, const ['LongDesc'])),
-                            if (_documentsFor(number).isNotEmpty)
-                              TextButton.icon(
-                                icon: const Icon(Icons.folder_open_outlined),
-                                label: const Text('Documents'),
-                                onPressed: () => _showDocuments(number),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor:
+                                    _documentsFor(number).isNotEmpty
+                                    ? const Color(0xFF1565C0)
+                                    : Colors.grey[700],
+                                textStyle: TextStyle(
+                                  fontWeight: _documentsFor(number).isNotEmpty
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
                               ),
+                              icon: const Icon(Icons.folder_open_outlined),
+                              label: const Text('Documents'),
+                              onPressed: number > 0
+                                  ? () => _showDocuments(number)
+                                  : null,
+                            ),
                             if (Constants.isEmployee)
                               Align(
                                 alignment: Alignment.centerRight,

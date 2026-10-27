@@ -1014,6 +1014,35 @@ class APIHelper {
         : Map<String, dynamic>.from(decoded as Map);
   }
 
+  static Future<void> uploadActivityDocument({
+    required int ticketKey,
+    required int historyNumber,
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    await ensureValidToken();
+    final result = _decodeResponse(
+      await diagnosticHttpClient
+          .post(
+            Uri.parse('${Constants.baseUrlData}UploadActivityDocument'),
+            headers: _authHeaders,
+            body: jsonEncode({
+              'TicketKey': ticketKey,
+              'HistoryNumber': historyNumber,
+              'FileName': fileName,
+              'Base64Content': base64Encode(bytes),
+            }),
+          )
+          .timeout(const Duration(seconds: 150)),
+    );
+    if (result is! Map || result['Code'].toString() != '300') {
+      throw const ApiException(
+        502,
+        'The document server did not confirm the upload.',
+      );
+    }
+  }
+
   static Future<void> updateActivity({
     required int ticketKey,
     required int historyNumber,
