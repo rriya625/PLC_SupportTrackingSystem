@@ -30,6 +30,7 @@ Future<void> logoutFromPortal(BuildContext context) async {
   Constants.debugMode = 'N';
   Constants.doNotLoadTicketsOnLoad = 'F';
   Constants.webViewAllDeptTickets = 'F';
+  Constants.allowDocumentDelete = 'F';
   Constants.contactName = '';
   Constants.qbLinkKey = '';
   Constants.emailAddress = '';
@@ -42,7 +43,7 @@ Future<void> logoutFromPortal(BuildContext context) async {
   );
 }
 
-/// The logout action always follows the page-specific actions.
+/// Full pages show Logout last; dialogs keep their own close actions.
 class PortalAppBar extends AppBar {
   PortalAppBar({
     super.key,
@@ -58,11 +59,13 @@ class PortalAppBar extends AppBar {
          actions: [
            ...?actions,
            Builder(
-             builder: (context) => IconButton(
-               tooltip: 'Logout',
-               icon: const Icon(Icons.logout),
-               onPressed: () => logoutFromPortal(context),
-             ),
+             builder: (context) => ModalRoute.of(context) is PopupRoute
+                 ? const SizedBox.shrink()
+                 : IconButton(
+                     tooltip: 'Logout',
+                     icon: const Icon(Icons.logout),
+                     onPressed: () => logoutFromPortal(context),
+                   ),
            ),
          ],
        );

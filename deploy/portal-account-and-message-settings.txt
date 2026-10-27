@@ -1,4 +1,4 @@
-Local release: web 1.0.1.42; interface service 30.1.1.23
+Local release: web 1.0.1.43; interface service 30.1.1.24
 
 User Flags
 Select a customer, then a contact. Customer lists load on first use.
@@ -61,3 +61,17 @@ requests and CSV, password reset/login, disable/enable, audit privacy,
 customer/contact filtering and message filtering/pagination.
 Temporary DEV test account removed; no real user's password was reset.
 Local services use PROSPECT_DEV. Production service/web deployment is separate.
+
+Document permission
+Allow deleting documents is available only for employees. Customers cannot
+use it. It controls customer, design and activity document deletion,
+including the separate Activity Documents popup. Confirmation is required.
+Files removed from design/activity lists are archived on the file service.
+The nullable Allow Document Delete column is enabled only for 12819 in
+DEV and production. Migration scripts are in deploy/sql.
+Logout is shown on full pages, not in popups.
+
+Production deployment note
+The production EMPLOYEE table is missing the Prospect Key link used by
+employee identification. Resolve that existing mapping before deploying
+this service release to production. Local testing uses PROSPECT_DEV.

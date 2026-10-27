@@ -28,7 +28,10 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       "${c['CODE']} - ${c['NAME'] ?? ''}";
   String? user, action;
   bool loading = true, busy = false, debug = false, skip = false;
-  bool deptTickets = false, enabled = true;
+  bool deptTickets = false,
+      enabled = true,
+      selectedEmployee = false,
+      deleteAllowed = false;
   int access = 0, invalidCount = 0;
   String? error, notice;
   DateTime from = DateTime.now().subtract(const Duration(days: 7)),
@@ -153,6 +156,8 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       skip = false;
       deptTickets = false;
       enabled = true;
+      selectedEmployee = false;
+      deleteAllowed = false;
       access = 0;
       invalidCount = 0;
       users = [];
@@ -186,6 +191,10 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       notice = null;
       if (!widget.audit && id != null) {
         final u = users.firstWhere((u) => u['ID'].toString() == id);
+        selectedEmployee = u['USER_TYPE'] == 'EMPLOYEE';
+        deleteAllowed =
+            selectedEmployee &&
+            ['T', 'Y'].contains(u['ALLOW_DOCUMENT_DELETE']?.toString());
         access = int.tryParse(u['ACCESS_LEVEL']?.toString() ?? '') ?? 0;
         invalidCount =
             int.tryParse(u['INVALID_LOGIN_COUNT']?.toString() ?? '') ?? 0;
@@ -213,10 +222,11 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
     });
     try {
       await api.call(
-        'UpdatePortalAccount',
+        'UpdatePortalSettings',
         body: {
           'TargetUserID': int.parse(user!),
           'AccessLevel': access,
+          'AllowDocumentDelete': selectedEmployee && deleteAllowed ? 'T' : 'F',
           'WebViewAllDeptTickets': deptTickets ? 'T' : 'F',
           'AccountDisabled': enabled ? 'F' : 'T',
           'DebugMode': debug ? 'T' : 'F',
@@ -224,12 +234,18 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
         },
       );
       final u = users.firstWhere((u) => u['ID'].toString() == user);
+      u['ALLOW_DOCUMENT_DELETE'] = selectedEmployee && deleteAllowed
+          ? 'T'
+          : 'F';
       u['ACCESS_LEVEL'] = access.toString();
       u['ACCOUNT_DISABLED'] = enabled ? 'F' : 'T';
       u['WEB_VIEW_ALL_DEPT_TICKETS'] = deptTickets ? 'T' : 'F';
       u['DEBUG_MODE'] = debug ? 'T' : 'F';
       u['DO_NOT_LOAD_TICKETS_ON_LOAD'] = skip ? 'T' : 'F';
       if (user == Constants.userID.toString()) {
+        Constants.allowDocumentDelete = selectedEmployee && deleteAllowed
+            ? 'T'
+            : 'F';
         Constants.accessLevel = access.toString();
         Constants.webViewAllDeptTickets = deptTickets ? 'T' : 'F';
         Constants.debugMode = debug ? 'T' : 'F';
@@ -638,7 +654,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         : (v) => setState(() => access = v!),
                   ),
                   SwitchListTile(
-                    title: const Text('Enable Account'),
+                    title: const Text('Allow this user to sign in'),
                     value: enabled,
                     onChanged:
                         user == null ||
@@ -648,7 +664,9 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         : (v) => setState(() => enabled = v),
                   ),
                   SwitchListTile(
-                    title: const Text('Web View All Dept Tickets'),
+                    title: const Text(
+                      'Allow viewing all tickets for this customer',
+                    ),
                     subtitle: const Text(
                       'Customers can view other tickets in their own department. Yours still shows their own tickets.',
                     ),
@@ -673,14 +691,26 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                     ],
                   ),
                   SwitchListTile(
-                    title: const Text('Debug Mode'),
+                    title: const Text('Allow deleting documents'),
+                    subtitle: Text(
+                      selectedEmployee
+                          ? 'Allow deleting documents on tickets this employee can access.'
+                          : 'Employees only. Customers cannot delete documents.',
+                    ),
+                    value: selectedEmployee && deleteAllowed,
+                    onChanged: user == null || busy || !selectedEmployee
+                        ? null
+                        : (v) => setState(() => deleteAllowed = v),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Record diagnostic logs'),
                     value: debug,
                     onChanged: user == null || busy
                         ? null
                         : (v) => setState(() => debug = v),
                   ),
                   SwitchListTile(
-                    title: const Text('Do Not Load Tickets On Load'),
+                    title: const Text('Wait for Search before loading tickets'),
                     subtitle: const Text(
                       'Open the filters and wait for Search.',
                     ),

@@ -52,6 +52,7 @@ class Constants {
   static bool get canViewDepartmentTickets =>
       isEmployee ||
       ['T', 'Y'].contains(webViewAllDeptTickets.trim().toUpperCase());
+  static String allowDocumentDelete = 'F';
   static String accessLevel = '';
   static String debugMode = 'N';
   static String doNotLoadTicketsOnLoad = 'F';
@@ -125,7 +126,7 @@ class Constants {
       }
     } catch (e) {
       print(
-        '[Constants] Error loading config.json: $e — using dart-define defaults',
+        '[Constants] Error loading config.json: $e â€” using dart-define defaults',
       );
     }
 

@@ -1,3 +1,4 @@
+import '../widgets/portal_loading.dart';
 import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/screens/document_gallery.dart';
 import 'package:ticket_tracker_app/widgets/activity_attachments.dart';
@@ -117,6 +118,10 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                           onDownload: () =>
                               downloadDocumentFile(context, d, _loadDocument),
                           onView: () => _openDocument(d),
+                          onDelete:
+                              Constants.isEmployee && _flag(d, 'CanDelete')
+                              ? () => _deleteActivityDocument(number, d)
+                              : null,
                         ),
                       )
                       .toList(),
@@ -151,6 +156,46 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _deleteActivityDocument(
+    int number,
+    Map<String, dynamic> document,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Remove attachment?'),
+        content: Text('Remove "${document['FileName']}" from this activity?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await withPortalLoading(
+        context,
+        'Removing document...',
+        () => APIHelper.deleteTicketDocument(
+          ticketKey: _ticketKey,
+          document: document,
+        ),
+      );
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop();
+      await _load();
+      if (mounted) await _showDocuments(number);
+    } catch (e) {
+      if (mounted) _showError(e);
+    }
   }
 
   Future<Map<String, dynamic>> _loadDocument(Map<String, dynamic> document) =>

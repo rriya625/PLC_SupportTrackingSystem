@@ -149,7 +149,8 @@ class _TicketDescriptionScreenState
                 ),
                 IconButton(
                   tooltip: 'Ticket documents',
-                  onPressed: () => _showTicketDocuments(includeActivities: true),
+                  onPressed: () =>
+                      _showTicketDocuments(includeActivities: true),
                   icon: const Icon(Icons.folder_open),
                 ),
               ]
@@ -568,7 +569,10 @@ class _TicketDescriptionScreenState
                   if (Constants.isEmployee)
                     _documentSection('Design documents', grouped['DESIGN']!),
                   if (includeActivities)
-                    _documentSection('Activity documents', grouped['ACTIVITY']!),
+                    _documentSection(
+                      'Activity documents',
+                      grouped['ACTIVITY']!,
+                    ),
                 ],
               ),
             ),
@@ -637,7 +641,8 @@ class _TicketDescriptionScreenState
               final history =
                   int.tryParse(document['HistoryNumber']?.toString() ?? '') ??
                   0;
-              final canDelete = portalFlag(document['CanDelete']);
+              final canDelete =
+                  Constants.isEmployee && portalFlag(document['CanDelete']);
               return DocumentListItem(
                 fileName: fileName,
                 onView: () =>
@@ -683,14 +688,19 @@ class _TicketDescriptionScreenState
     );
     if (confirmed != true) return;
     try {
-      await APIHelper.deleteTicketAttachment(
-        ticketKey: int.parse(ticketKey),
-        customerDocKey:
-            int.tryParse(document['CustomerDocKey']?.toString() ?? '') ?? 0,
+      await withPortalLoading(
+        context,
+        'Removing document...',
+        () => APIHelper.deleteTicketDocument(
+          ticketKey: int.parse(ticketKey),
+          document: document,
+        ),
       );
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      await _showTicketDocuments(includeActivities: _documentsIncludeActivities);
+      await _showTicketDocuments(
+        includeActivities: _documentsIncludeActivities,
+      );
     } catch (error) {
       if (mounted)
         await showMessageDialog(context, 'Unable to remove attachment: $error');

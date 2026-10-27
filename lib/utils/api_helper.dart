@@ -119,6 +119,7 @@ class APIHelper {
     Constants.debugMode = 'N';
     Constants.doNotLoadTicketsOnLoad = 'F';
     Constants.webViewAllDeptTickets = 'F';
+    Constants.allowDocumentDelete = 'F';
     WebLogHelper.clear();
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
@@ -201,6 +202,8 @@ class APIHelper {
           userData['DO_NOT_LOAD_TICKETS_ON_LOAD']?.toString() ?? 'F';
       Constants.webViewAllDeptTickets =
           userData['WEB_VIEW_ALL_DEPT_TICKETS']?.toString() ?? 'F';
+      Constants.allowDocumentDelete =
+          userData['ALLOW_DOCUMENT_DELETE']?.toString() ?? 'F';
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
       Constants.userType =
@@ -1216,6 +1219,29 @@ class APIHelper {
     // XData treats '+' literally in these query arguments. Preserve real plus
     // signs as %2B and encode spaces as %20 on both hops of a document request.
     return uri.replace(query: uri.query.replaceAll('+', '%20'));
+  }
+
+  static Future<void> deleteTicketDocument({
+    required int ticketKey,
+    required Map<String, dynamic> document,
+  }) async {
+    await ensureValidToken();
+    _decodeResponse(
+      await diagnosticHttpClient.post(
+        Uri.parse('${Constants.baseUrlData}DeleteTicketDocument'),
+        headers: _authHeaders,
+        body: jsonEncode({
+          'TicketKey': ticketKey,
+          'HistoryNumber':
+              int.tryParse(document['HistoryNumber']?.toString() ?? '') ?? 0,
+          'CustomerDocKey':
+              int.tryParse(document['CustomerDocKey']?.toString() ?? '') ?? 0,
+          'Source': document['Source']?.toString() ?? 'CUSTOMER',
+          'FileName': document['FileName']?.toString() ?? '',
+          'Confirmed': true,
+        }),
+      ),
+    );
   }
 
   static Future<void> deleteTicketAttachment({

@@ -1,0 +1,9 @@
+-- Employee-only document deletion. Nullable, no flag constraint.
+DECLARE n NUMBER; BEGIN
+ SELECT COUNT(*) INTO n FROM ALL_TAB_COLUMNS WHERE OWNER='PROSPECT_DEV' AND TABLE_NAME='PROSPECT' AND COLUMN_NAME='Allow Document Delete';
+ IF n=0 THEN EXECUTE IMMEDIATE 'ALTER TABLE PROSPECT_DEV.PROSPECT ADD ("Allow Document Delete" VARCHAR2(1) DEFAULT ''F'')'; END IF;
+END;
+/
+UPDATE PROSPECT_DEV.PROSPECT P SET "Allow Document Delete"='T' WHERE P."Key"=12819;
+MERGE INTO PROSPECT_DEV.AUDITTXTPROS T USING (SELECT 14 C,'DeleteTicketDocument' A,'Delete document' M FROM DUAL) S ON (T."Action Name"=S.A) WHEN NOT MATCHED THEN INSERT ("Code","Sub Code","Action Name","Message") VALUES (S.C,0,S.A,S.M);
+COMMIT;

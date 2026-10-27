@@ -30,6 +30,8 @@ class FakeAdminApi extends MessagesApi {
             'ID': '12819',
             'NAME': 'Muru',
             'DEPARTMENT': 'PLC',
+            'USER_TYPE': 'EMPLOYEE',
+            'ALLOW_DOCUMENT_DELETE': 'T',
             'ACCESS_LEVEL': '2',
             'ACCOUNT_DISABLED': 'F',
             'WEB_VIEW_ALL_DEPT_TICKETS': 'F',
@@ -38,7 +40,7 @@ class FakeAdminApi extends MessagesApi {
           },
         ],
       };
-    if (endpoint == 'UpdatePortalAccount') saved = body;
+    if (endpoint == 'UpdatePortalSettings') saved = body;
     return {'Code': 300, 'Data': []};
   }
 }
@@ -79,7 +81,12 @@ void main() {
     expect(selector.enableFilter, isTrue);
     selector.onSelected!('12819');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Do Not Load Tickets On Load'));
+    await tester.scrollUntilVisible(
+      find.text('Wait for Search before loading tickets'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Wait for Search before loading tickets'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Save'),
@@ -91,6 +98,7 @@ void main() {
     expect(api.saved, {
       'TargetUserID': 12819,
       'AccessLevel': 2,
+      'AllowDocumentDelete': 'T',
       'WebViewAllDeptTickets': 'F',
       'AccountDisabled': 'F',
       'DebugMode': 'T',
