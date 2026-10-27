@@ -518,16 +518,29 @@ class _TicketDescriptionScreenState
                     : () => showDialog<void>(
                         context: dialogContext,
                         builder: (_) => DocumentGallery(
-                          documents: documents.where((document) =>
-                            Constants.isEmployee ||
-                            document['Source']?.toString().toUpperCase() != 'DESIGN',
-                          ).toList(),
-                          loadDocument: (document) => APIHelper.downloadTicketDocument(
-                            ticketKey: int.parse(ticketKey),
-                            historyNumber: int.tryParse(document['HistoryNumber']?.toString() ?? '') ?? 0,
-                            source: document['Source']?.toString() ?? '',
-                            fileName: document['FileName']?.toString() ?? '',
-                          ),
+                          documents: documents
+                              .where(
+                                (document) =>
+                                    Constants.isEmployee ||
+                                    document['Source']
+                                            ?.toString()
+                                            .toUpperCase() !=
+                                        'DESIGN',
+                              )
+                              .toList(),
+                          loadDocument: (document) =>
+                              APIHelper.downloadTicketDocument(
+                                ticketKey: int.parse(ticketKey),
+                                historyNumber:
+                                    int.tryParse(
+                                      document['HistoryNumber']?.toString() ??
+                                          '',
+                                    ) ??
+                                    0,
+                                source: document['Source']?.toString() ?? '',
+                                fileName:
+                                    document['FileName']?.toString() ?? '',
+                              ),
                         ),
                       ),
                 child: const Text('View/Download Documents'),
@@ -562,16 +575,16 @@ class _TicketDescriptionScreenState
               final canDelete = portalFlag(document['CanDelete']);
               return ListTile(
                 title: Text(fileName),
+                onTap: () =>
+                    showDocumentPreview(context, document, _loadDocument),
                 subtitle: source == 'ACTIVITY'
                     ? Text('Activity #$history')
                     : Text(source),
                 trailing: Wrap(
                   spacing: 4,
                   children: [
-                    IconButton(
-                      tooltip: 'Download',
-                      onPressed: () => _downloadDocument(document),
-                      icon: const Icon(Icons.download),
+                    DocumentDownloadButton(
+                      onDownload: () => _downloadDocument(document),
                     ),
                     if (canDelete)
                       IconButton(
@@ -586,32 +599,17 @@ class _TicketDescriptionScreenState
     );
   }
 
-  Future<void> _downloadDocument(Map<String, dynamic> document) async {
-    try {
-      final data = await APIHelper.downloadTicketDocument(
+  Future<Map<String, dynamic>> _loadDocument(Map<String, dynamic> document) =>
+      APIHelper.downloadTicketDocument(
         ticketKey: int.parse(ticketKey),
         historyNumber:
             int.tryParse(document['HistoryNumber']?.toString() ?? '') ?? 0,
         source: document['Source']?.toString() ?? '',
         fileName: document['FileName']?.toString() ?? '',
       );
-      final fileName =
-          data['FileName']?.toString() ??
-          document['FileName']?.toString() ??
-          'download';
-      final bytes = decodeDocumentBytes(
-        data['Base64Content']?.toString() ?? '',
-      );
-      final message = await saveDownloadedDocument(bytes, fileName);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } catch (error) {
-      if (mounted) await showMessageDialog(context, 'Download failed: $error');
-    }
-  }
+
+  Future<void> _downloadDocument(Map<String, dynamic> document) =>
+      downloadDocumentFile(context, document, _loadDocument);
 
   Future<void> _deleteDocument(Map<String, dynamic> document) async {
     final fileName = document['FileName']?.toString() ?? '';

@@ -1164,6 +1164,27 @@ class APIHelper {
     required String fileName,
   }) async {
     await ensureValidToken();
+    final uri = documentDownloadUri(
+      ticketKey: ticketKey,
+      historyNumber: historyNumber,
+      source: source,
+      fileName: fileName,
+    );
+    final decoded = _decodeResponse(
+      await diagnosticHttpClient.get(uri, headers: _authHeaders),
+    );
+    final data = decoded is Map && decoded['Data'] is Map
+        ? decoded['Data']
+        : decoded;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
+  static Uri documentDownloadUri({
+    required int ticketKey,
+    required int historyNumber,
+    required String source,
+    required String fileName,
+  }) {
     final uri = Uri.parse('${Constants.baseUrlData}DownloadTicketDocument')
         .replace(
           queryParameters: {
@@ -1173,13 +1194,9 @@ class APIHelper {
             'FileName': fileName,
           },
         );
-    final decoded = _decodeResponse(
-      await diagnosticHttpClient.get(uri, headers: _authHeaders),
-    );
-    final data = decoded is Map && decoded['Data'] is Map
-        ? decoded['Data']
-        : decoded;
-    return Map<String, dynamic>.from(data as Map);
+    // XData treats '+' literally in these query arguments. Preserve real plus
+    // signs as %2B and encode spaces as %20 on both hops of a document request.
+    return uri.replace(query: uri.query.replaceAll('+', '%20'));
   }
 
   static Future<void> deleteTicketAttachment({

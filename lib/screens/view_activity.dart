@@ -1,6 +1,5 @@
-import 'package:ticket_tracker_app/utils/document_bytes.dart';
+import 'package:ticket_tracker_app/screens/document_gallery.dart';
 import 'package:ticket_tracker_app/widgets/activity_attachments.dart';
-import 'package:ticket_tracker_app/utils/document_download_helper.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/utils/ticket_email.dart';
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
@@ -115,7 +114,10 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                         (d) => ListTile(
                           leading: const Icon(Icons.insert_drive_file_outlined),
                           title: Text(d['FileName'].toString()),
-                          trailing: const Icon(Icons.open_in_new),
+                          trailing: DocumentDownloadButton(
+                            onDownload: () =>
+                                downloadDocumentFile(context, d, _loadDocument),
+                          ),
                           onTap: () => _openDocument(d),
                         ),
                       )
@@ -141,51 +143,16 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
     );
   }
 
-  Future<void> _openDocument(Map<String, dynamic> document) async {
-    try {
-      final data = await APIHelper.downloadTicketDocument(
+  Future<Map<String, dynamic>> _loadDocument(Map<String, dynamic> document) =>
+      APIHelper.downloadTicketDocument(
         ticketKey: _ticketKey,
-        historyNumber: int.parse(document['HistoryNumber'].toString()),
+        historyNumber: int.tryParse(document['HistoryNumber'].toString()) ?? 0,
         source: 'ACTIVITY',
         fileName: document['FileName'].toString(),
       );
-      final bytes = decodeDocumentBytes(data['Base64Content'].toString());
-      final name = data['FileName'].toString();
-      if (!mounted) return;
-      if (RegExp(
-        r'\.(png|jpe?g|gif|webp|bmp)$',
-        caseSensitive: false,
-      ).hasMatch(name)) {
-        await showDialog<void>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: Text(name),
-            content: SizedBox(
-              width: 700,
-              height: 500,
-              child: InteractiveViewer(
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(c),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      } else {
-        final message = await saveDownloadedDocument(bytes, name);
-        if (mounted)
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(message)));
-      }
-    } catch (error) {
-      if (mounted) _showError(error);
-    }
-  }
+
+  Future<void> _openDocument(Map<String, dynamic> document) =>
+      showDocumentPreview(context, document, _loadDocument);
 
   Future<void> _attachToActivity(int number) async {
     final draft = ActivityAttachments()

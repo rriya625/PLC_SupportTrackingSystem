@@ -3,6 +3,82 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
 import 'package:ticket_tracker_app/utils/document_download_helper.dart';
+import 'package:ticket_tracker_app/utils/api_helper.dart';
+
+const documentBusyIndicator = SizedBox(
+  width: 20,
+  height: 20,
+  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1565C0)),
+);
+
+class DocumentDownloadButton extends StatefulWidget {
+  final Future<void> Function() onDownload;
+  const DocumentDownloadButton({super.key, required this.onDownload});
+  @override
+  State<DocumentDownloadButton> createState() => _DocumentDownloadButtonState();
+}
+
+class _DocumentDownloadButtonState extends State<DocumentDownloadButton> {
+  bool busy = false;
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: busy ? 'Downloading...' : 'Download',
+    icon: busy ? documentBusyIndicator : const Icon(Icons.download),
+    onPressed: busy
+        ? null
+        : () async {
+            setState(() => busy = true);
+            try {
+              await widget.onDownload();
+            } finally {
+              if (mounted) setState(() => busy = false);
+            }
+          },
+  );
+}
+
+Future<void> showDocumentPreview(
+  BuildContext context,
+  Map<String, dynamic> document,
+  Future<Map<String, dynamic>> Function(Map<String, dynamic>) loader,
+) => showDialog<void>(
+  context: context,
+  builder: (_) => DocumentGallery(documents: [document], loadDocument: loader),
+);
+
+Future<void> downloadDocumentFile(
+  BuildContext context,
+  Map<String, dynamic> document,
+  Future<Map<String, dynamic>> Function(Map<String, dynamic>) loader,
+) async {
+  try {
+    final data = await loader(document);
+    final encoded = data['Base64Content'];
+    if (encoded is! String)
+      throw const FormatException('No file content returned.');
+    final message = await saveDownloadedDocument(
+      decodeDocumentBytes(encoded),
+      data['FileName']?.toString() ?? document['FileName'].toString(),
+    );
+    if (context.mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+  } catch (error) {
+    if (context.mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(documentError(error))));
+  }
+}
+
+String documentError(Object error) {
+  if (error is ApiException && error.statusCode == 404)
+    return 'File could not be found. Please refresh the document list or contact support.';
+  if (error is ApiException && error.statusCode == 403)
+    return 'You do not have access to this document.';
+  return 'Unable to download this document. Please retry.';
+}
 
 /// Receives only the documents returned for the current user's ticket access.
 class DocumentGallery extends StatelessWidget {
@@ -48,6 +124,7 @@ class DocumentGallery extends StatelessWidget {
                       document: documents[index],
                       loadDocument: loadDocument,
                       saveDocument: saveDocument,
+                      previewHeight: documents.length == 1 ? 400 : 200,
                     ),
                   ),
           ),
@@ -69,12 +146,14 @@ class _DocumentPreview extends StatefulWidget {
   final Future<Map<String, dynamic>> Function(Map<String, dynamic>)
   loadDocument;
   final Future<String> Function(Uint8List, String) saveDocument;
+  final double previewHeight;
 
   const _DocumentPreview({
     super.key,
     required this.document,
     required this.loadDocument,
     required this.saveDocument,
+    required this.previewHeight,
   });
 
   @override
@@ -83,21 +162,33 @@ class _DocumentPreview extends StatefulWidget {
 
 class _DocumentPreviewState extends State<_DocumentPreview>
     with AutomaticKeepAliveClientMixin {
-  late Future<Uint8List> bytes = _load();
+  late Future<Uint8List>? bytes = supportsPreview ? _load() : null;
   bool saving = false;
+  String? downloadError;
   String get name => widget.document['FileName']?.toString() ?? 'Unnamed file';
+  bool get supportsPreview => RegExp(
+    r'\.(png|jpe?g|gif|webp|bmp)$',
+    caseSensitive: false,
+  ).hasMatch(name);
 
   @override
   bool get wantKeepAlive => true;
 
   Future<Uint8List> _load() async {
     final data = await widget.loadDocument(widget.document);
-    return decodeDocumentBytes(data['Base64Content']?.toString() ?? '');
+    final encoded = data['Base64Content'];
+    if (encoded is! String)
+      throw const FormatException('No file content returned.');
+    return decodeDocumentBytes(encoded);
   }
 
-  Future<void> _save(Uint8List data) async {
-    setState(() => saving = true);
+  Future<void> _save() async {
+    setState(() {
+      saving = true;
+      downloadError = null;
+    });
     try {
+      final data = await (bytes ??= _load());
       final message = await widget.saveDocument(data, name);
       if (mounted)
         ScaffoldMessenger.of(
@@ -105,9 +196,10 @@ class _DocumentPreviewState extends State<_DocumentPreview>
         ).showSnackBar(SnackBar(content: Text(message)));
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Download failed: $error')));
+        setState(() {
+          downloadError = documentError(error);
+          bytes = null;
+        });
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -129,68 +221,72 @@ class _DocumentPreviewState extends State<_DocumentPreview>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final source = widget.document['Source']?.toString() ?? '';
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(name, style: Theme.of(context).textTheme.titleMedium),
-          if (source == 'ACTIVITY')
-            Text('Activity #${widget.document['HistoryNumber']}'),
           const SizedBox(height: 8),
-          FutureBuilder<Uint8List>(
-            future: bytes,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
+          if (!supportsPreview)
+            _unsupported()
+          else
+            FutureBuilder<Uint8List>(
+              future: bytes,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(documentError(snapshot.error!)),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          bytes = _load();
+                        }),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  );
+                }
+                if (!snapshot.hasData)
+                  return const SizedBox(
+                    height: 160,
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                final data = snapshot.data!;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Unable to load this document.'),
-                    TextButton(
-                      onPressed: () => setState(() {
-                        bytes = _load();
-                      }),
-                      child: const Text('Retry'),
-                    ),
+                    if (RegExp(
+                      r'\.(png|jpe?g|gif|webp|bmp)$',
+                      caseSensitive: false,
+                    ).hasMatch(name))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: InteractiveViewer(
+                          child: Image.memory(
+                            data,
+                            height: widget.previewHeight,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => _unsupported(),
+                          ),
+                        ),
+                      )
+                    else
+                      _unsupported(),
                   ],
                 );
-              }
-              if (!snapshot.hasData)
-                return const SizedBox(
-                  height: 160,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              final data = snapshot.data!;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (RegExp(
-                    r'\.(png|jpe?g|gif|webp|bmp)$',
-                    caseSensitive: false,
-                  ).hasMatch(name))
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(
-                        data,
-                        height: 200,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => _unsupported(),
-                      ),
-                    )
-                  else
-                    _unsupported(),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton.icon(
-                      onPressed: saving ? null : () => _save(data),
-                      icon: const Icon(Icons.download),
-                      label: Text(saving ? 'Downloading...' : 'Download'),
-                    ),
-                  ),
-                ],
-              );
-            },
+              },
+            ),
+          if (downloadError != null)
+            Text(downloadError!, style: const TextStyle(color: Colors.red)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              onPressed: saving ? null : _save,
+              icon: saving ? documentBusyIndicator : const Icon(Icons.download),
+              label: Text(saving ? 'Downloading...' : 'Download'),
+            ),
           ),
           const Divider(),
         ],

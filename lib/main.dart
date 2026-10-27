@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'constants.dart';
+import 'widgets/portal_scroll_behavior.dart';
 import 'screens/login_screen.dart';
 import 'utils/spinner_helper.dart'; // ⬅️ Add this import to access rootNavigatorKey
+
 //import 'utils/log_helper.dart';
 
 void main() async {
@@ -19,7 +21,17 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Customer Support System',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const PortalScrollBehavior(),
       theme: ThemeData(
+        scrollbarTheme: const ScrollbarThemeData(
+          thumbVisibility: WidgetStatePropertyAll(true),
+          trackVisibility: WidgetStatePropertyAll(true),
+          thickness: WidgetStatePropertyAll(10),
+          thumbColor: WidgetStatePropertyAll(Color(0xFF1565C0)),
+          trackColor: WidgetStatePropertyAll(Color(0xFFE3F2FD)),
+          trackBorderColor: WidgetStatePropertyAll(Color(0xFF90CAF9)),
+          radius: Radius.circular(5),
+        ),
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue).copyWith(
           primary: const Color(0xFF1565C0),
           secondary: const Color(0xFF1565C0),
@@ -41,7 +53,9 @@ class MyApp extends StatelessWidget {
           style: TextButton.styleFrom(foregroundColor: const Color(0xFF1565C0)),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1565C0)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF1565C0),
+          ),
         ),
       ),
       navigatorKey: rootNavigatorKey, // ✅ This enables global dialog access

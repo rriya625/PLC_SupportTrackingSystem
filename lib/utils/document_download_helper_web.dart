@@ -8,6 +8,6 @@ Future<String> saveDownloadedDocument(Uint8List bytes, String fileName) async {
   html.AnchorElement(href: url)
     ..download = fileName
     ..click();
-  html.Url.revokeObjectUrl(url);
-  return 'Download started.';
+  Future.delayed(const Duration(seconds: 30), () => html.Url.revokeObjectUrl(url));
+  return 'Download started. Check your browser’s Downloads.';
 }
