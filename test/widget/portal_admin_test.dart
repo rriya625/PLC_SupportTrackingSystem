@@ -46,6 +46,7 @@ class FakeAdminApi extends MessagesApi {
 }
 
 void main() {
+  setUp(() => Constants.userType = "EMPLOYEE");
   tearDown(() => Constants.accessLevel = '');
   testWidgets('Non-admin cannot load user flags', (tester) async {
     Constants.accessLevel = '0';
@@ -107,6 +108,38 @@ void main() {
     expect(Constants.skipInitialTicketLoad, isTrue);
     Constants.doNotLoadTicketsOnLoad = 'F';
   });
+  for (final audit in [false, true]) {
+    testWidgets('Customer is locked on ${audit ? "audit" : "flags"}', (
+      tester,
+    ) async {
+      Constants.userType = 'CUSTOMER';
+      Constants.accessLevel = '2';
+      final api = FakeAdminApi();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PortalAdminScreen(api: api, audit: audit),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        api.calls,
+        containsAll(['GetPortalCustomers', 'GetPortalContacts']),
+      );
+      final picker = tester.widget<DropdownMenu<String>>(
+        find.byType(DropdownMenu<String>).first,
+      );
+      expect(picker.enabled, isFalse);
+      expect(find.text('All customers'), findsNothing);
+      expect(
+        tester
+            .widget<DropdownMenu<String>>(
+              find.byType(DropdownMenu<String>).at(1),
+            )
+            .enabled,
+        isTrue,
+      );
+    });
+  }
   testWidgets('Audit view loads lookups and waits for Search', (tester) async {
     Constants.accessLevel = '2';
     final api = FakeAdminApi();

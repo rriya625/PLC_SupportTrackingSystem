@@ -1,4 +1,4 @@
-Local release: web 1.0.1.43; interface service 30.1.1.24
+Local release: web 1.0.1.44; interface service 30.1.1.27
 
 User Flags
 Select a customer, then a contact. Customer lists load on first use.
@@ -75,3 +75,10 @@ Production deployment note
 The production EMPLOYEE table is missing the Prospect Key link used by
 employee identification. Resolve that existing mapping before deploying
 this service release to production. Local testing uses PROSPECT_DEV.
+
+User Flags and Activity Audit customer filters
+Support administrators see the complete customer list and every contact
+linked to the selected QB Link Key. Customer administrators are locked
+to their own customer. The service applies this restriction to lookups,
+audit searches, settings changes, password resets and login-count resets.
+Access Level 2 remains required. Contact changes clear the old selection.

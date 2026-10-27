@@ -17,6 +17,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
   List<Map<String, dynamic>> users = [], types = [], rows = [];
   List<Map<String, dynamic>> customers = [];
   String? customer;
+  bool get customerLocked => !Constants.isEmployee;
   bool contactsLoading = false,
       customersLoading = false,
       customersLoaded = false,
@@ -66,7 +67,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
     final search = userSearch.text.trim().toLowerCase();
     return users
         .where((u) => search.isEmpty || label(u).toLowerCase().contains(search))
-        .take(100)
         .toList();
   }
 
@@ -86,6 +86,13 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       loading = false;
       if (!Constants.isPortalAdmin) error = 'Access Level 2 is required.';
     });
+    if (Constants.isPortalAdmin && customerLocked) {
+      await loadCustomers();
+      if (!mounted || customers.isEmpty) return;
+      final own = customers.first;
+      customerSearch.text = customerLabel(own);
+      await selectCustomer(own['CODE'].toString());
+    }
   }
 
   Future<void> loadCustomers() async {
@@ -129,7 +136,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
   }
 
   void _filterCustomers() {
-    if (!mounted) return;
+    if (!mounted || customerLocked) return;
     setState(() {
       if (customer != null &&
           !customers.any(
@@ -494,7 +501,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         label: const Text('Select customer'),
                         enableFilter: true,
                         enableSearch: true,
-                        enabled: !busy,
+                        enabled: !busy && !customerLocked,
                         dropdownMenuEntries: customers
                             .where(
                               (c) =>
@@ -503,7 +510,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                                     customerSearch.text.toLowerCase(),
                                   ),
                             )
-                            .take(100)
                             .map(
                               (c) => DropdownMenuEntry(
                                 value: c['CODE'].toString(),
@@ -559,15 +565,16 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                           : 'All contacts for this customer',
                     ),
                   ),
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () {
-                            customerSearch.clear();
-                            selectCustomer(null);
-                          },
-                    child: const Text('All customers'),
-                  ),
+                  if (!customerLocked)
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () {
+                              customerSearch.clear();
+                              selectCustomer(null);
+                            },
+                      child: const Text('All customers'),
+                    ),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: typesLoading ? 48 : 0,
