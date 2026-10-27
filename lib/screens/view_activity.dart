@@ -697,9 +697,9 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                             const SizedBox(height: 8),
                             SelectableText(_value(item, const ['LongDesc'])),
                             if (_documentsFor(number).isNotEmpty)
-                              IconButton(
-                                tooltip: 'Activity documents',
-                                icon: const Icon(Icons.photo_library_outlined),
+                              TextButton.icon(
+                                icon: const Icon(Icons.folder_open_outlined),
+                                label: const Text('Documents'),
                                 onPressed: () => _showDocuments(number),
                               ),
                             if (Constants.isEmployee)

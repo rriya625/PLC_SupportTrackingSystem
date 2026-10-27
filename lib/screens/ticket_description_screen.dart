@@ -1,4 +1,5 @@
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
+import 'package:ticket_tracker_app/screens/document_gallery.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
 import 'package:ticket_tracker_app/screens/view_activity.dart';
 import 'package:ticket_tracker_app/screens/message_history.dart';
@@ -510,6 +511,26 @@ class _TicketDescriptionScreenState
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext),
                 child: const Text('Close'),
+              ),
+              FilledButton(
+                onPressed: documents.isEmpty
+                    ? null
+                    : () => showDialog<void>(
+                        context: dialogContext,
+                        builder: (_) => DocumentGallery(
+                          documents: documents.where((document) =>
+                            Constants.isEmployee ||
+                            document['Source']?.toString().toUpperCase() != 'DESIGN',
+                          ).toList(),
+                          loadDocument: (document) => APIHelper.downloadTicketDocument(
+                            ticketKey: int.parse(ticketKey),
+                            historyNumber: int.tryParse(document['HistoryNumber']?.toString() ?? '') ?? 0,
+                            source: document['Source']?.toString() ?? '',
+                            fileName: document['FileName']?.toString() ?? '',
+                          ),
+                        ),
+                      ),
+                child: const Text('View/Download Documents'),
               ),
             ],
           );

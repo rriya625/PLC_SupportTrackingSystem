@@ -167,6 +167,8 @@ void main() {
     await tester.enterText(picker, 'Mu');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
+    final editor = find.descendant(of: picker, matching: find.byType(EditableText));
+    expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
     await tester.tap(find.text('Murugan').last);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 400));

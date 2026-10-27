@@ -33,8 +33,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Activity documents'), findsOneWidget);
-      await tester.tap(find.byTooltip('Activity documents'));
+      expect(find.widgetWithText(TextButton, 'Documents'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Documents'));
       await tester.pumpAndSettle();
       expect(find.text('Activity #1 documents'), findsOneWidget);
       expect(find.text('activity-one.png'), findsOneWidget);

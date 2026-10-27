@@ -473,7 +473,10 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
                         },
                 ),
               const SizedBox(height: 12),
-              if (searching) const LinearProgressIndicator(),
+              SizedBox(
+                height: 4,
+                child: searching ? const LinearProgressIndicator() : null,
+              ),
               LayoutBuilder(
                 builder: (context, constraints) => DropdownMenu<String>(
                   key: ValueKey(kind),

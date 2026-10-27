@@ -4,15 +4,27 @@ import 'diagnostic_http_client.dart';
 import 'api_helper.dart';
 
 class MessagesApi {
+  static Uri requestUri(String endpoint, Map<String, String>? query) {
+    final uri = Uri.parse('${Constants.baseUrlData}$endpoint');
+    if (query == null) return uri;
+    // Delphi distinguishes an explicit empty value from a valueless key.
+    return uri.replace(
+      query: query.entries
+          .map(
+            (entry) =>
+                '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}',
+          )
+          .join('&'),
+    );
+  }
+
   Future<Map<String, dynamic>> call(
     String endpoint, {
     Map<String, dynamic>? body,
     Map<String, String>? query,
   }) async {
     await APIHelper.ensureValidToken();
-    final uri = Uri.parse(
-      '${Constants.baseUrlData}$endpoint',
-    ).replace(queryParameters: query);
+    final uri = requestUri(endpoint, query);
     final headers = {
       'Authorization': 'Bearer ${Constants.accessToken}',
       'Content-Type': 'application/json',
