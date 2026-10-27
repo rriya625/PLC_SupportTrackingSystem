@@ -670,17 +670,13 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                   ...activityData.map((item) {
                     final number = _historyNumber(item);
                     return Card(
+                      color: const Color(0xFFEEEEEE),
+                      surfaceTintColor: Colors.transparent,
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              number > 0 ? 'Activity #$number' : 'Activity',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
                             Text(
                               'Entry Date: ${_value(item, const ['EntryDate'])}',
                             ),
