@@ -340,7 +340,12 @@ class _MessagesScreenState extends State<MessagesScreen> {
       onPressed: () async {
         await showMessagePopup(
           context,
-          builder: (_) => MessageComposeScreen(api: api),
+          tall: true,
+          builder: (_) => MessageComposeScreen(
+            api: api,
+            initialCustomer: customer,
+            initialSender: sender,
+          ),
         );
         if (mounted) await load();
       },
@@ -532,7 +537,14 @@ class _MessageDetailState extends State<_MessageDetail> {
 }
 
 class MessageComposeScreen extends StatefulWidget {
-  const MessageComposeScreen({super.key, required this.api, this.reply});
+  const MessageComposeScreen({
+    super.key,
+    required this.api,
+    this.reply,
+    this.initialCustomer = '',
+    this.initialSender = '',
+  });
+  final String initialCustomer, initialSender;
   final MessagesApi api;
   final Map<String, dynamic>? reply;
   @override
@@ -590,7 +602,33 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
     final linkedTicket = widget.reply?['TicketKey']?.toString() ?? '';
     if (linkedTicket.isNotEmpty && linkedTicket != '0')
       ticket.text = linkedTicket;
-    if (widget.reply == null) loadGroups();
+    if (widget.reply == null) initializeRecipient();
+  }
+
+  Future<void> initializeRecipient() async {
+    if (!Constants.isEmployee || widget.initialCustomer.isEmpty) {
+      await loadGroups();
+      return;
+    }
+    kind = 'CUSTOMER';
+    await loadCustomers();
+    if (!mounted || kind != 'CUSTOMER') return;
+    final matches = customers.where((c) => c['ID'] == widget.initialCustomer);
+    if (matches.isEmpty) return;
+    customerSearch.text = matches.first['Name']!;
+    await chooseCustomer(widget.initialCustomer);
+    if (!mounted ||
+        kind != 'CUSTOMER' ||
+        selectedCustomer != widget.initialCustomer)
+      return;
+    final id = widget.initialSender.startsWith('P:')
+        ? widget.initialSender.substring(2)
+        : '';
+    final contacts = options.where((c) => c['ID'] == id);
+    if (contacts.isNotEmpty) {
+      search.text = contacts.first['Name']!;
+      setState(() => recipient = id);
+    }
   }
 
   @override

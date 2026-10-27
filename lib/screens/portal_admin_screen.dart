@@ -25,7 +25,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       typesLoading = false,
       typesLoaded = false;
   final customerSearch = TextEditingController();
-  final customerFocus = FocusNode(), typeFocus = FocusNode();
   String customerLabel(Map<String, dynamic> c) =>
       "${c['CODE']} - ${c['NAME'] ?? ''}";
   String? user, action;
@@ -44,12 +43,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
     super.initState();
     userSearch.addListener(_filterUsers);
     customerSearch.addListener(_filterCustomers);
-    customerFocus.addListener(() {
-      if (customerFocus.hasFocus) loadCustomers();
-    });
-    typeFocus.addListener(() {
-      if (typeFocus.hasFocus) loadTypes();
-    });
     load();
   }
 
@@ -73,8 +66,6 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
 
   @override
   void dispose() {
-    customerFocus.dispose();
-    typeFocus.dispose();
     customerSearch.dispose();
     userSearch.dispose();
     super.dispose();
@@ -412,6 +403,154 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
     confirm.dispose();
   }
 
+  Widget lookupButton(bool isCustomer) {
+    final entries = isCustomer ? customers : users;
+    final selected = isCustomer ? customer : user;
+    final matches = entries.where(
+      (e) => (isCustomer ? e['CODE'] : e['ID']).toString() == selected,
+    );
+    final title = matches.isNotEmpty
+        ? (isCustomer ? customerLabel(matches.first) : label(matches.first))
+        : (isCustomer
+              ? 'Select customer'
+              : (widget.audit
+                    ? 'Contact (all contacts if empty)'
+                    : 'Select user'));
+    final button = OutlinedButton(
+      key: ValueKey(isCustomer ? 'customerLookup' : 'contactLookup'),
+      onPressed:
+          busy ||
+              customersLoading ||
+              contactsLoading ||
+              (isCustomer ? customerLocked : customer == null)
+          ? null
+          : () => chooseLookup(isCustomer),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.left,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Icon(Icons.arrow_drop_down),
+        ],
+      ),
+    );
+    return Row(
+      children: [
+        Expanded(child: button),
+        if (widget.audit && (!isCustomer || !customerLocked))
+          IconButton(
+            tooltip: isCustomer
+                ? 'All customers'
+                : 'All contacts for this customer',
+            onPressed: busy || contactsLoading
+                ? null
+                : () {
+                    if (isCustomer) {
+                      selectCustomer(null);
+                    } else {
+                      selectUser(null);
+                    }
+                  },
+            icon: const Icon(Icons.filter_alt_off_outlined),
+          ),
+      ],
+    );
+  }
+
+  Future<void> chooseLookup(bool isCustomer, {bool activity = false}) async {
+    if (activity) {
+      await loadTypes();
+    } else if (isCustomer) {
+      await loadCustomers();
+    }
+    if (!mounted || error != null) return;
+    final choices = activity ? types : (isCustomer ? customers : users);
+    String entryLabel(Map<String, dynamic> e) => activity
+        ? e['NAME'].toString()
+        : (isCustomer ? customerLabel(e) : label(e));
+    var term = '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (c) => StatefulBuilder(
+        builder: (c, update) {
+          final filtered = choices
+              .where(
+                (e) => entryLabel(e).toLowerCase().contains(term.toLowerCase()),
+              )
+              .toList();
+          final allowAll = widget.audit;
+          return AlertDialog(
+            title: Text(
+              activity
+                  ? 'Activity type'
+                  : (isCustomer ? 'Customer' : 'Contact'),
+            ),
+            content: SizedBox(
+              width: 520,
+              height: MediaQuery.sizeOf(c).height * .45,
+              child: Column(
+                children: [
+                  TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Search'),
+                    onChanged: (v) => update(() => term = v),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filtered.length + (allowAll ? 1 : 0),
+                      itemBuilder: (c, i) {
+                        if (allowAll && i == 0)
+                          return ListTile(
+                            title: Text(
+                              activity
+                                  ? 'All activities'
+                                  : isCustomer
+                                  ? 'All customers'
+                                  : 'All contacts for this customer',
+                            ),
+                            onTap: () => Navigator.pop(c, ''),
+                          );
+                        final entry = filtered[i - (allowAll ? 1 : 0)];
+                        return ListTile(
+                          title: Text(entryLabel(entry)),
+                          onTap: () => Navigator.pop(
+                            c,
+                            (activity || isCustomer
+                                    ? entry['CODE']
+                                    : entry['ID'])
+                                .toString(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(c),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    if (!mounted || result == null) return;
+    if (activity) {
+      setState(() => action = result.isEmpty ? null : result);
+    } else if (isCustomer) {
+      await selectCustomer(result.isEmpty ? null : result);
+    } else {
+      selectUser(result.isEmpty ? null : result);
+    }
+  }
+
   String date(DateTime d) => d.toIso8601String().substring(0, 10);
   Future<void> search({bool more = false}) async {
     if (busy) return;
@@ -490,129 +629,40 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                         ? const PortalLoading(message: 'Loading customers...')
                         : null,
                   ),
-                  Listener(
-                    onPointerDown: (_) => loadCustomers(),
-                    child: LayoutBuilder(
-                      builder: (context, size) => DropdownMenu<String>(
-                        key: ValueKey(customerPickerGeneration),
-                        controller: customerSearch,
-                        focusNode: customerFocus,
-                        requestFocusOnTap: true,
-                        width: size.maxWidth,
-                        menuHeight: 300,
-                        label: const Text('Select customer'),
-                        enableFilter: true,
-                        enableSearch: true,
-                        enabled: !busy && !customerLocked,
-                        dropdownMenuEntries: customers
-                            .map(
-                              (c) => DropdownMenuEntry(
-                                value: c['CODE'].toString(),
-                                label: customerLabel(c),
-                              ),
-                            )
-                            .toList(),
-                        onSelected: selectCustomer,
-                      ),
-                    ),
-                  ),
+                  lookupButton(true),
                   const SizedBox(height: 12),
                   if (contactsLoading)
                     const PortalLoading(message: 'Loading contacts...'),
                 ],
-
-                LayoutBuilder(
-                  builder: (context, size) => DropdownMenu<String>(
-                    controller: userSearch,
-                    width: size.maxWidth,
-                    menuHeight: 300,
-                    enableFilter: true,
-                    enableSearch: true,
-                    requestFocusOnTap: true,
-                    enabled: !busy && (customer != null && !contactsLoading),
-                    label: Text(
-                      widget.audit
-                          ? 'Contact (all contacts if empty)'
-                          : 'Select user',
-                    ),
-                    dropdownMenuEntries: visibleUsers
-                        .map(
-                          (u) => DropdownMenuEntry(
-                            value: u['ID'].toString(),
-                            label: label(u),
-                          ),
-                        )
-                        .toList(),
-                    onSelected: selectUser,
-                  ),
-                ),
+                lookupButton(false),
                 if (widget.audit) ...[
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () {
-                            userSearch.clear();
-                            selectUser(null);
-                          },
-                    child: Text(
-                      customer == null
-                          ? 'All users'
-                          : 'All contacts for this customer',
-                    ),
-                  ),
-                  if (!customerLocked)
-                    TextButton(
-                      onPressed: busy
-                          ? null
-                          : () {
-                              customerFocus.unfocus();
-                              customerSearch.clear();
-                              customerPickerGeneration++;
-                              selectCustomer(null);
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (mounted) customerFocus.requestFocus();
-                              });
-                            },
-                      child: const Text('All customers'),
-                    ),
                   const SizedBox(height: 12),
+                  if (typesLoading)
+                    const PortalLoading(message: 'Loading activity types...'),
                   SizedBox(
-                    height: typesLoading ? 48 : 0,
-                    child: typesLoading
-                        ? const PortalLoading(
-                            message: 'Loading activity types...',
-                          )
-                        : null,
-                  ),
-                  Listener(
-                    onPointerDown: (_) => loadTypes(),
-                    child: LayoutBuilder(
-                      builder: (context, size) => DropdownMenu<String>(
-                        width: size.maxWidth,
-                        menuHeight: 300,
-                        enableFilter: true,
-                        enableSearch: true,
-                        focusNode: typeFocus,
-                        requestFocusOnTap: true,
-                        label: const Text('Activity type'),
-                        helperText: typesLoaded
-                            ? '${types.length} activity types. Type to search or scroll for more.'
-                            : 'Open to load activity types.',
-                        enabled: !busy,
-                        dropdownMenuEntries: [
-                          const DropdownMenuEntry(
-                            value: '0',
-                            label: 'All activities',
-                          ),
-                          ...types.map(
-                            (t) => DropdownMenuEntry(
-                              value: t['CODE'].toString(),
-                              label: t['NAME'].toString(),
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      key: const ValueKey('activityLookup'),
+                      onPressed: busy || typesLoading
+                          ? null
+                          : () => chooseLookup(false, activity: true),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              action == null || action == '0'
+                                  ? 'All activities'
+                                  : types
+                                        .firstWhere(
+                                          (t) => t['CODE'].toString() == action,
+                                        )['NAME']
+                                        .toString(),
+                              textAlign: TextAlign.left,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
+                          const Icon(Icons.arrow_drop_down),
                         ],
-                        initialSelection: '0',
-                        onSelected: (v) => setState(() => action = v),
                       ),
                     ),
                   ),

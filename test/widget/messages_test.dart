@@ -91,6 +91,50 @@ class FakeMessages extends MessagesApi {
 }
 
 void main() {
+  testWidgets(
+    'New message validates and preselects the inbox customer/contact',
+    (tester) async {
+      Constants.userType = 'EMPLOYEE';
+      final api = FakeMessages(true);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MessageComposeScreen(
+            api: api,
+            initialCustomer: 'QB879',
+            initialSender: 'P:20068',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final selectors = tester
+          .widgetList<DropdownMenu<String>>(find.byType(DropdownMenu<String>))
+          .toList();
+      expect(selectors.first.controller!.text, 'QB879 - Illinois State Police');
+      expect(selectors.last.controller!.text, '20068 - Clifford');
+      expect(selectors.last.initialSelection, '20068');
+      expect(api.lastQuery!['Search'], 'QB879');
+    },
+  );
+  testWidgets(
+    'Customer login does not inherit employee-only customer recipients',
+    (tester) async {
+      Constants.userType = 'CUSTOMER';
+      final api = FakeMessages(false);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MessageComposeScreen(
+            api: api,
+            initialCustomer: 'QB879',
+            initialSender: 'P:20068',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(api.calls, isNot(contains('GetMessageRecipients')));
+      expect(find.text('Select customer'), findsNothing);
+    },
+  );
+
   testWidgets('Message filters load on demand and Clear restores inbox', (
     tester,
   ) async {

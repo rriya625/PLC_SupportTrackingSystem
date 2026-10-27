@@ -66,21 +66,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(api.calls, isNot(contains('GetPortalContacts')));
     expect(api.calls, isEmpty);
-    await tester.tap(find.byType(DropdownMenu<String>).first);
+    await tester.tap(find.byKey(const ValueKey('customerLookup')));
     await tester.pumpAndSettle();
     expect(api.calls, contains('GetPortalCustomers'));
-    final customer = tester.widget<DropdownMenu<String>>(
-      find.byType(DropdownMenu<String>).first,
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'QBPLC',
     );
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    customer.onSelected!('QBPLC');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('QBPLC - Porter Lee'));
     await tester.pumpAndSettle();
     expect(api.calls, contains('GetPortalContacts'));
-    final selector = tester.widget<DropdownMenu<String>>(
-      find.byType(DropdownMenu<String>).last,
+    await tester.tap(find.byKey(const ValueKey('contactLookup')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      '12819',
     );
-    expect(selector.enableFilter, isTrue);
-    selector.onSelected!('12819');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('12819 - Muru - PLC'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Wait for Search before loading tickets'),
@@ -125,18 +135,20 @@ void main() {
         api.calls,
         containsAll(['GetPortalCustomers', 'GetPortalContacts']),
       );
-      final picker = tester.widget<DropdownMenu<String>>(
-        find.byType(DropdownMenu<String>).first,
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const ValueKey('customerLookup')),
+            )
+            .onPressed,
+        isNull,
       );
-      expect(picker.enabled, isFalse);
       expect(find.text('All customers'), findsNothing);
       expect(
         tester
-            .widget<DropdownMenu<String>>(
-              find.byType(DropdownMenu<String>).at(1),
-            )
-            .enabled,
-        isTrue,
+            .widget<OutlinedButton>(find.byKey(const ValueKey('contactLookup')))
+            .onPressed,
+        isNotNull,
       );
     });
   }
@@ -148,22 +160,50 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(api.calls, isEmpty);
-    await tester.tap(find.byType(DropdownMenu<String>).last);
+    await tester.tap(find.byKey(const ValueKey('activityLookup')));
     await tester.pumpAndSettle();
     expect(api.calls, contains('GetPortalAuditTypes'));
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.tap(find.text('All activities').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('All customers'));
+    await tester.tap(find.byTooltip('All customers'));
     await tester.pumpAndSettle();
-    final customerField = find.descendant(
-      of: find.byType(DropdownMenu<String>).first,
-      matching: find.byType(TextField),
+    await tester.tap(find.byKey(const ValueKey('customerLookup')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'QBPLC',
     );
-    await tester.tap(customerField);
-    await tester.enterText(customerField, 'QBPLC');
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(customerField).controller!.text, 'QBPLC');
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(find.text('QBPLC - Porter Lee'), findsOneWidget);
+    await tester.tap(find.text('QBPLC - Porter Lee'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('customerLookup')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'no match',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('QBPLC - Porter Lee'),
+      ),
+      findsNothing,
+    );
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Close'),
+      ),
+    );
+    await tester.pumpAndSettle();
     expect(api.calls, isNot(contains('GetPortalCustomerAudit')));
     await tester.tap(find.text('Search'));
     await tester.pumpAndSettle();
