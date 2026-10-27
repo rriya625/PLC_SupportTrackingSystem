@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/screens/document_gallery.dart';
 import 'package:ticket_tracker_app/widgets/activity_attachments.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
@@ -743,7 +744,7 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         title: const Text('View Activity'),
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,

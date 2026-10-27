@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -86,7 +87,7 @@ class _MessageHistoryScreenState extends State<MessageHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         backgroundColor: const Color(0xFF1565C0),
         title: const Text(
           'Message History',

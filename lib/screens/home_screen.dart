@@ -1,3 +1,6 @@
+import 'portal_admin_screen.dart';
+import '../widgets/message_popup.dart';
+import '../widgets/portal_app_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:ticket_tracker_app/utils/messages_api.dart';
 import 'package:flutter/material.dart';
@@ -154,6 +157,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    if (Constants.isPortalAdmin) ...[
+                      _buildMainButton(
+                        icon: Icons.manage_accounts,
+                        label: 'User Flags',
+                        onTap: () => showMessagePopup(
+                          context,
+                          builder: (_) => const PortalAdminScreen(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _buildMainButton(
+                        icon: Icons.history,
+                        label: 'Activity Audit',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const PortalAdminScreen(audit: true),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     if (Constants.isDebugModeEnabled) ...[
                       _buildMainButton(
                         icon: Icons.download_for_offline_outlined,
@@ -177,21 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildMainButton(
                       icon: Icons.logout,
                       label: 'Logout',
-                      onTap: () {
-                        // Optionally clear user session variables
-                        Constants.userID = 0;
-                        Constants.contactName = '';
-                        Constants.debugMode = 'N';
-                        WebLogHelper.clear();
-
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => LoginScreen(),
-                          ),
-                          (route) => false,
-                        );
-                      },
+                      onTap: () => logoutFromPortal(context),
                     ),
                   ],
                 ),
@@ -213,7 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
 
-      appBar: AppBar(
+      appBar: PortalAppBar(
         title: const Text('Porter Lee Corporation'),
         centerTitle: true,
         backgroundColor: Colors.blue[800],

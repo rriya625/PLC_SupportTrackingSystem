@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -164,7 +165,7 @@ class DocumentGallery extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AppBar(
+          PortalAppBar(
             automaticallyImplyLeading: false,
             leading: IconButton(
               tooltip: 'Back to documents',

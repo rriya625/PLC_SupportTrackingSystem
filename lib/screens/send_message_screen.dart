@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -29,6 +30,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   bool _sendToEmployee = false;
   bool _loadingGroups = true;
   bool _loadingEmployees = false;
+  bool _employeesLoaded = false;
 
   bool get _isUrgentSelection =>
       !_sendToEmployee &&
@@ -44,7 +46,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
     super.initState();
     _name = Constants.contactName;
     _fetchMessageToList();
-    if (Constants.isEmployee) _fetchEmployeeRecipients();
 
     // ✅ Autofocus after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -114,12 +115,14 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   }
 
   Future<void> _fetchEmployeeRecipients() async {
+    if (_loadingEmployees || _employeesLoaded) return;
     setState(() => _loadingEmployees = true);
     try {
       final recipients = await APIHelper.getEmployeeRecipients();
       if (!mounted) return;
       setState(() {
         _employeeRecipients = recipients;
+        _employeesLoaded = true;
         _selectedEmployeeId = null;
       });
     } catch (error) {
@@ -236,7 +239,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         title: const Text('Send Message'),
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
@@ -249,8 +252,6 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_loadingGroups || (_sendToEmployee && _loadingEmployees))
-                  const PortalLoading(message: 'Loading recipients...'),
                 const Text(
                   'Agency: Porter Lee',
                   style: TextStyle(fontSize: 16),
@@ -270,11 +271,15 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                       ButtonSegment(value: true, label: Text('Employee')),
                     ],
                     selected: {_sendToEmployee},
-                    onSelectionChanged: (value) =>
-                        setState(() => _sendToEmployee = value.first),
+                    onSelectionChanged: (value) {
+                      setState(() => _sendToEmployee = value.first);
+                      if (_sendToEmployee) _fetchEmployeeRecipients();
+                    },
                   ),
                   const SizedBox(height: 12),
                 ],
+                if (_sendToEmployee && _loadingEmployees)
+                  const PortalLoading(message: 'Loading employees...'),
                 if (_sendToEmployee)
                   Autocomplete<Map<String, dynamic>>(
                     displayStringForOption: (employee) {
@@ -317,6 +322,9 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                 else
                   DropdownButtonFormField<String>(
                     isExpanded: true,
+                    hint: Text(
+                      _loadingGroups ? 'Loading groups...' : 'Select group',
+                    ),
                     value: _selectedMessageTo,
                     items: _messageToOptions
                         .map(

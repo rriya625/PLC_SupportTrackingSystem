@@ -31,6 +31,17 @@ class ApiException implements Exception {
 /// This class provides static methods for interacting with backend APIs and
 /// manages authentication tokens and user session information.
 class APIHelper {
+  static Future<void> recordSessionEvent(String event) async {
+    final response = await diagnosticHttpClient
+        .post(
+          Uri.parse('${Constants.baseUrlData}PortalSessionEvent'),
+          headers: _authHeaders,
+          body: jsonEncode({'EventName': event}),
+        )
+        .timeout(const Duration(seconds: 10));
+    _decodeResponse(response);
+  }
+
   static Map<String, String> get _authHeaders => {
     'Authorization': 'Bearer ${Constants.accessToken}',
     'Accept': 'application/json',
@@ -106,6 +117,7 @@ class APIHelper {
     // Debug logging is opt-in per authenticated account. Never carry a prior
     // user's setting into a new login attempt.
     Constants.debugMode = 'N';
+    Constants.doNotLoadTicketsOnLoad = 'F';
     WebLogHelper.clear();
     print("Auth URL: " + Constants.baseUrlAuth);
     print("Interface URL: " + Constants.baseUrlData);
@@ -139,7 +151,9 @@ class APIHelper {
       Constants.userID = int.parse(userId);
       Constants.userPassword = password;
 
-      return await fetchUserInfo();
+      final error = await fetchUserInfo();
+      if (error == null) await recordSessionEvent('LOGIN');
+      return error;
     }
 
     if (jsonBody is Map && jsonBody.containsKey('Message')) {
@@ -182,6 +196,8 @@ class APIHelper {
       // DEBUG_MODE is intentionally read first. T enables diagnostics; older
       // services omit it and therefore remain safely defaulted to N.
       Constants.debugMode = userData['DEBUG_MODE']?.toString() ?? 'N';
+      Constants.doNotLoadTicketsOnLoad =
+          userData['DO_NOT_LOAD_TICKETS_ON_LOAD']?.toString() ?? 'F';
       Constants.contactName = userData['Contact Name']?.toString() ?? '';
       Constants.departmentName = userData['Department Name']?.toString() ?? '';
       Constants.userType =

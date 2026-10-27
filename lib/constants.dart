@@ -50,6 +50,9 @@ class Constants {
   static String userType = '';
   static String accessLevel = '';
   static String debugMode = 'N';
+  static String doNotLoadTicketsOnLoad = 'F';
+  static bool get skipInitialTicketLoad =>
+      doNotLoadTicketsOnLoad.trim().toUpperCase() == 'T';
   static String contactName = '';
   static String qbLinkKey = '';
   static String emailAddress = '';
@@ -58,6 +61,7 @@ class Constants {
 
   static bool get isDev => buildEnv.toLowerCase() == 'dev';
   static bool get isProd => buildEnv.toLowerCase() == 'prod';
+  static bool get isPortalAdmin => num.tryParse(accessLevel.trim()) == 2;
   static bool get isEmployee => userType.trim().toUpperCase() == 'EMPLOYEE';
   static bool get isDebugModeEnabled =>
       const ['T', 'Y'].contains(debugMode.trim().toUpperCase());

@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'ticket_description_screen.dart';
 import 'package:ticket_tracker_app/constants.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:ticket_tracker_app/utils/web_download_helper_stub.dart'
     if (dart.library.html) 'package:ticket_tracker_app/utils/web_download_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ticket_tracker_app/widgets/portal_loading.dart';
 
 class ViewTicketsScreen extends StatefulWidget {
   const ViewTicketsScreen({Key? key}) : super(key: key);
@@ -51,6 +53,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   bool isTicketGroupLoading = true;
 
   bool _filtersExpanded = false;
+  bool _initializing = true;
 
   @override
   void initState() {
@@ -59,6 +62,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     fromDate = now.subtract(const Duration(days: 365));
     toDate = now;
     ticketType = 'Yours';
+    _filtersExpanded = Constants.skipInitialTicketLoad;
     if (Constants.isEmployee) {
       sortBy = 'Ticket Key';
       sortDirection = 'DESC';
@@ -72,9 +76,16 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   }
 
   Future<void> _initializeSearch() async {
-    await _loadSortPreference();
-    await Future.wait([_fetchDepartments(), _fetchTicketGroups()]);
-    if (mounted) await _fetchAndSetTickets();
+    try {
+      await _loadSortPreference();
+      if (!mounted) return;
+      await Future.wait([_fetchDepartments(), _fetchTicketGroups()]);
+      if (mounted && !Constants.skipInitialTicketLoad) {
+        await _fetchAndSetTickets(showLoading: false);
+      }
+    } finally {
+      if (mounted) setState(() => _initializing = false);
+    }
   }
 
   Future<void> _fetchDepartments() async {
@@ -201,6 +212,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         qbLinkKey: Constants.qbLinkKey,
         useActiveOnly: useActiveGroupsOnly,
       );
+      if (!mounted) return;
 
       //print("Raw ticket group data from API (${data.length} entries):");
       //for (var group in data) {
@@ -231,7 +243,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     } catch (e) {
       debugPrint('Error fetching ticket groups: $e');
     } finally {
-      setState(() => isTicketGroupLoading = false);
+      if (mounted) setState(() => isTicketGroupLoading = false);
     }
   }
 
@@ -256,7 +268,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     }
   }
 
-  Future<void> _fetchAndSetTickets() async {
+  Future<void> _fetchAndSetTickets({bool showLoading = true}) async {
     if (!await _validateDepartmentScope()) return;
     if (fromDate != null && toDate != null && fromDate!.isAfter(toDate!)) {
       setState(() {
@@ -287,29 +299,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
     });
 
     try {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return Dialog(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 16),
-                    Text("Loading tickets..."),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      });
-
-      final data = await APIHelper.fetchTickets(
+      Future<List<Map<String, dynamic>>> request() => APIHelper.fetchTickets(
         ticketType: ticketType,
         status: status,
         searchBy: searchBy,
@@ -320,11 +310,15 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         ticketGroupCode: selectedTicketGroup ?? '',
         departmentCode: _departmentCodeForRequest,
       );
+      final data = showLoading
+          ? await withPortalLoading(context, 'Loading tickets...', request)
+          : await request();
+      if (!mounted) return;
       setState(() {
         tickets = data;
+        _filtersExpanded = false;
       });
 
-      Navigator.of(context, rootNavigator: true).pop();
       if (mounted &&
           searchBy == 'Ticket #' &&
           searchController.text.trim().isNotEmpty &&
@@ -340,7 +334,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         );
       }
     } catch (e) {
-      Navigator.of(context, rootNavigator: true).pop();
+      if (!mounted) return;
       setState(() {
         tickets.clear(); // clear ticket list on error
       });
@@ -462,7 +456,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         title: const Text('Porter Lee Corporation'),
         centerTitle: true,
         backgroundColor: Colors.blue[800],
@@ -470,86 +464,93 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         automaticallyImplyLeading: true,
       ),
       backgroundColor: Colors.white,
-      body: LayoutBuilder(
-        builder: (context, available) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Custom expandable header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Search Filters',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      _filtersExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                    ),
-                    onPressed: () {
-                      setState(() => _filtersExpanded = !_filtersExpanded);
-                    },
-                  ),
-                ],
-              ),
-              // Expanded filter UI
-              if (_filtersExpanded) ...[
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: available.maxHeight * .7,
-                  ),
-                  child: SingleChildScrollView(child: _buildFilters()),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              Text(
-                'Total Tickets: ${tickets.length}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey[700],
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Ticket list
-              Expanded(
-                child: ListView.builder(
-                  itemCount: tickets.length,
-                  itemBuilder: (context, index) {
-                    final ticket = tickets[index];
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                const TicketDescriptionScreenStateful(),
-                            settings: RouteSettings(
-                              arguments: ticket['TicketKey'],
-                            ),
+      body: _initializing
+          ? const Center(child: PortalLoading(message: 'Loading tickets...'))
+          : LayoutBuilder(
+              builder: (context, available) => Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Custom expandable header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Search Filters',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                      },
-                      child: _buildTicketCard(
-                        ticketKey: ticket['TicketKey'] ?? '',
-                        date:
-                            'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
-                        shortDesc: ticket['ShortDesc'] ?? '',
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _filtersExpanded
+                                ? Icons.keyboard_arrow_up
+                                : Icons.keyboard_arrow_down,
+                          ),
+                          onPressed: () {
+                            setState(
+                              () => _filtersExpanded = !_filtersExpanded,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    // Expanded filter UI
+                    if (_filtersExpanded) ...[
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: available.maxHeight * .7,
+                        ),
+                        child: SingleChildScrollView(child: _buildFilters()),
                       ),
-                    );
-                  },
+                      const SizedBox(height: 20),
+                    ],
+
+                    Text(
+                      'Total Tickets: ${tickets.length}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Ticket list
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: tickets.length,
+                        itemBuilder: (context, index) {
+                          final ticket = tickets[index];
+                          return GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const TicketDescriptionScreenStateful(),
+                                  settings: RouteSettings(
+                                    arguments: ticket['TicketKey'],
+                                  ),
+                                ),
+                              );
+                            },
+                            child: _buildTicketCard(
+                              ticketKey: ticket['TicketKey'] ?? '',
+                              date:
+                                  'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
+                              shortDesc: ticket['ShortDesc'] ?? '',
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 

@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -250,7 +251,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
     return WillPopScope(
       onWillPop: _confirmDiscardChanges,
       child: Scaffold(
-        appBar: AppBar(
+        appBar: PortalAppBar(
           title: const Text('Create New Ticket'),
           centerTitle: true,
           backgroundColor: Colors.blue[800],

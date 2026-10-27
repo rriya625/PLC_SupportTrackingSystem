@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
 import 'package:ticket_tracker_app/screens/document_gallery.dart';
 import 'package:ticket_tracker_app/utils/activity_fields.dart';
@@ -132,7 +133,7 @@ class _TicketDescriptionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         actions: Constants.isEmployee && !_loading && _loadError == null
             ? [
                 IconButton(
@@ -148,7 +149,7 @@ class _TicketDescriptionScreenState
                 ),
                 IconButton(
                   tooltip: 'Ticket documents',
-                  onPressed: _showTicketDocuments,
+                  onPressed: () => _showTicketDocuments(includeActivities: true),
                   icon: const Icon(Icons.folder_open),
                 ),
               ]
@@ -498,10 +499,13 @@ class _TicketDescriptionScreenState
     );
   }
 
-  Future<void> _showTicketDocuments() async {
+  bool _documentsIncludeActivities = false;
+
+  Future<void> _showTicketDocuments({bool includeActivities = false}) async {
+    _documentsIncludeActivities = includeActivities;
     try {
       List<String> warnings = [];
-      final documents = await withPortalLoading(
+      final allDocuments = await withPortalLoading(
         context,
         'Loading documents...',
         () => APIHelper.getTicketDocuments(
@@ -510,6 +514,13 @@ class _TicketDescriptionScreenState
         ),
       );
       if (!mounted) return;
+      final documents = allDocuments
+          .where(
+            (document) =>
+                includeActivities ||
+                document['Source']?.toString().toUpperCase() != 'ACTIVITY',
+          )
+          .toList();
       await showDialog<void>(
         context: context,
         builder: (dialogContext) {
@@ -556,10 +567,8 @@ class _TicketDescriptionScreenState
                   _documentSection('Customer uploads', grouped['CUSTOMER']!),
                   if (Constants.isEmployee)
                     _documentSection('Design documents', grouped['DESIGN']!),
-                  _documentSection(
-                    'Activity files (grouped by activity number)',
-                    grouped['ACTIVITY']!,
-                  ),
+                  if (includeActivities)
+                    _documentSection('Activity documents', grouped['ACTIVITY']!),
                 ],
               ),
             ),
@@ -681,7 +690,7 @@ class _TicketDescriptionScreenState
       );
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
-      await _showTicketDocuments();
+      await _showTicketDocuments(includeActivities: _documentsIncludeActivities);
     } catch (error) {
       if (mounted)
         await showMessageDialog(context, 'Unable to remove attachment: $error');

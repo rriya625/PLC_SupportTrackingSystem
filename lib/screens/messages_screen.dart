@@ -1,3 +1,4 @@
+import '../widgets/portal_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/widgets/message_popup.dart';
 import 'package:ticket_tracker_app/widgets/portal_loading.dart';
@@ -87,7 +88,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
+    appBar: PortalAppBar(
       title: const Text('Messages'),
       backgroundColor: Colors.blue[800],
       foregroundColor: Colors.white,
@@ -221,7 +222,7 @@ class _MessageDetailState extends State<_MessageDetail> {
   Widget build(BuildContext context) {
     final m = widget.message;
     return Scaffold(
-      appBar: AppBar(
+      appBar: PortalAppBar(
         title: const Text('Message Details'),
         backgroundColor: Colors.blue[800],
         foregroundColor: Colors.white,
@@ -431,7 +432,7 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
+    appBar: PortalAppBar(
       title: Text(widget.reply == null ? 'Send Message' : 'Reply to Message'),
       backgroundColor: Colors.blue[800],
       foregroundColor: Colors.white,
@@ -483,7 +484,7 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
                   ),
                 ),
               const SizedBox(height: 12),
-              if (searching)
+              if (searching && kind != 'GROUP')
                 const PortalLoading(message: 'Loading recipients...'),
               LayoutBuilder(
                 builder: (context, constraints) => DropdownMenu<String>(
