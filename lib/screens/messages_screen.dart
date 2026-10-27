@@ -20,6 +20,49 @@ class _MessagesScreenState extends State<MessagesScreen> {
   bool busy = false, more = false;
   String? error;
   String customer = '', sender = '';
+  String messageStatus = 'CURRENT';
+  static const statusLabels = {
+    'CURRENT': 'Current messages',
+    'DELETED': 'Deleted messages',
+    'ALL': 'All messages',
+  };
+
+  Future<void> chooseStatus() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Message status'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: statusLabels.entries
+                .map(
+                  (entry) => ListTile(
+                    title: Text(entry.value),
+                    trailing: entry.key == messageStatus
+                        ? const Icon(Icons.check, color: Colors.blue)
+                        : null,
+                    onTap: () => Navigator.pop(c, entry.key),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    if (selected != null && mounted && selected != messageStatus) {
+      setState(() => messageStatus = selected);
+      await searchMessages();
+    }
+  }
+
   DateTime? fromDate, toDate;
   List<Map<String, dynamic>>? customerOptions, senderOptions;
   Map<String, String> appliedFilters = {};
@@ -28,6 +71,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
   @override
   void initState() {
     super.initState();
+    if (!Constants.isEmployee) {
+      customer = Constants.qbLinkKey;
+      customerOptions = [
+        {
+          'Code': customer,
+          'Name': Constants.departmentName.isEmpty
+              ? customer
+              : Constants.departmentName,
+        },
+      ];
+    }
     load();
   }
 
@@ -39,7 +93,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
     });
     try {
       final result = await api.call(
-        appliedFilters.isEmpty ? 'GetMessages' : 'GetFilteredMessages',
+        appliedFilters.isEmpty ? 'GetMessages' : 'GetMessagesByStatus',
         query: {
           ...appliedFilters,
           'BeforeKey': next && rows.isNotEmpty
@@ -76,6 +130,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Future<void> chooseFilter(bool isCustomer) async {
+    if (isCustomer && !Constants.isEmployee) return;
     if (pickingFilter || busy) return;
     pickingFilter = true;
     try {
@@ -197,6 +252,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
       return;
     }
     appliedFilters = {
+      'Status': messageStatus,
       'QBLinkKey': customer,
       'SenderID': sender,
       'DateFrom': fromDate == null ? '' : dateText(fromDate),
@@ -207,7 +263,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Future<void> clearFilters() async {
     setState(() {
-      customer = '';
+      customer = Constants.isEmployee ? '' : Constants.qbLinkKey;
+      messageStatus = 'CURRENT';
       sender = '';
       fromDate = null;
       toDate = null;
@@ -236,7 +293,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 SizedBox(
                   width: width,
                   child: OutlinedButton(
-                    onPressed: busy ? null : () => chooseFilter(true),
+                    onPressed: busy || !Constants.isEmployee
+                        ? null
+                        : () => chooseFilter(true),
                     child: Row(
                       children: [
                         Expanded(
@@ -246,7 +305,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             textAlign: TextAlign.left,
                           ),
                         ),
-                        const Icon(Icons.arrow_drop_down),
+                        Icon(
+                          Constants.isEmployee
+                              ? Icons.arrow_drop_down
+                              : Icons.lock_outline,
+                        ),
                       ],
                     ),
                   ),
@@ -277,6 +340,24 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   onPressed: busy ? null : () => chooseDate(false),
                   child: Text('To date: ${dateText(toDate)}'),
                 ),
+                SizedBox(
+                  width: size.maxWidth < 270 ? size.maxWidth : 270,
+                  child: OutlinedButton(
+                    onPressed: busy ? null : chooseStatus,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Status: ${statusLabels[messageStatus]}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Icon(Icons.arrow_drop_down),
+                      ],
+                    ),
+                  ),
+                ),
                 FilledButton(
                   onPressed: busy ? null : searchMessages,
                   child: const Text('Search'),
@@ -292,6 +373,45 @@ class _MessagesScreenState extends State<MessagesScreen> {
       ),
     ],
   );
+  Future<void> deleteRow(Map<String, dynamic> row) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Delete message?'),
+        content: const Text(
+          'Move this message to Deleted in your queue? The database record and other recipients’ copies are kept.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await withPortalLoading(
+        context,
+        'Deleting message...',
+        () => api.call(
+          'DeletePortalMessage',
+          body: {'MessageKey': row['MessageKey'], 'Confirmed': true},
+        ),
+      );
+      if (mounted) await load();
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   Future<void> open(Map<String, dynamic> row) async {
     try {
       final result = await withPortalLoading(
@@ -383,8 +503,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   ? FontWeight.bold
                   : FontWeight.normal;
               return ListTile(
+                trailing: row['CanDelete'] == true && row['Deleted'] != true
+                    ? IconButton(
+                        tooltip: 'Delete message',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: busy ? null : () => deleteRow(row),
+                      )
+                    : null,
                 leading: Icon(
-                  row['Unread'] == true
+                  row['Deleted'] == true
+                      ? Icons.delete_outline
+                      : row['Unread'] == true
                       ? Icons.mark_email_unread
                       : Icons.drafts_outlined,
                 ),
@@ -393,7 +522,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   style: TextStyle(fontWeight: weight),
                 ),
                 subtitle: Text(
-                  '${row['DateSent']} ${_ticketLabel(row)}\n${row['Message']}',
+                  '${row['Deleted'] == true ? 'Deleted • ' : ''}${row['DateSent']} ${_ticketLabel(row)}\n${row['Message']}',
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontWeight: weight),
@@ -480,6 +609,8 @@ class _MessageDetailState extends State<_MessageDetail> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               Text(m['DateSent']?.toString() ?? ''),
+              if (m['Deleted'] == true)
+                const Text('Deleted message — kept for reference.'),
               const SizedBox(height: 20),
               SelectableText(m['Message']?.toString() ?? ''),
               const SizedBox(height: 24),
@@ -520,7 +651,7 @@ class _MessageDetailState extends State<_MessageDetail> {
                       icon: const Icon(Icons.confirmation_number_outlined),
                       label: Text('Open ticket #${m['TicketKey']}'),
                     ),
-                  if (Constants.isEmployee && m['CanDelete'] == true)
+                  if (m['CanDelete'] == true)
                     OutlinedButton.icon(
                       onPressed: busy ? null : remove,
                       icon: const Icon(Icons.delete_outline),

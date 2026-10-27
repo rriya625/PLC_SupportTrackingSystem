@@ -18,8 +18,9 @@ class FakeMessages extends MessagesApi {
     'Message': 'Inbox test message',
     'DateSent': '2026-10-25',
     'Unread': true,
-    'CanReply': true,
-    'CanDelete': employee,
+    'CanReply': !deleted,
+    'Deleted': deleted,
+    'CanDelete': !deleted,
   };
   @override
   Future<Map<String, dynamic>> call(
@@ -41,11 +42,15 @@ class FakeMessages extends MessagesApi {
           },
         ],
       };
-    if (endpoint == 'GetFilteredMessages') lastQuery = query;
-    if (endpoint == 'GetMessages' || endpoint == 'GetFilteredMessages')
+    if (endpoint == 'GetMessagesByStatus') lastQuery = query;
+    if (endpoint == 'GetMessages' || endpoint == 'GetMessagesByStatus')
       return {
         'Code': 300,
-        'Data': deleted ? [] : [row],
+        'Data':
+            (query?['Status'] == 'ALL' ||
+                (query?['Status'] == 'DELETED' ? deleted : !deleted))
+            ? [row]
+            : [],
         'HasMore': false,
         'UnreadCount': deleted ? 0 : 1,
       };
@@ -91,6 +96,71 @@ class FakeMessages extends MessagesApi {
 }
 
 void main() {
+  setUp(() {
+    Constants.qbLinkKey = 'QB879';
+    Constants.departmentName = 'Illinois State Police';
+  });
+  testWidgets(
+    'Customer agency stays locked and customer can delete own queue entry',
+    (tester) async {
+      Constants.userType = 'CUSTOMER';
+      final api = FakeMessages(false);
+      await tester.pumpWidget(MaterialApp(home: MessagesScreen(api: api)));
+      await tester.pumpAndSettle();
+      final agency = find.widgetWithText(
+        OutlinedButton,
+        'Customer: Illinois State Police',
+      );
+      expect(tester.widget<OutlinedButton>(agency).onPressed, isNull);
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      expect(api.lastQuery?['QBLinkKey'], 'QB879');
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+      expect(find.text('Customer: Illinois State Police'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete message'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(api.deleted, true);
+      expect(find.text('No received messages.'), findsOneWidget);
+    },
+  );
+  testWidgets('Delete from queue keeps message available in Deleted and All', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Constants.userType = 'EMPLOYEE';
+    final api = FakeMessages(true);
+    await tester.pumpWidget(MaterialApp(home: MessagesScreen(api: api)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Delete message'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, false);
+    await tester.tap(find.byTooltip('Delete message'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(find.text('No received messages.'), findsOneWidget);
+    await tester.tap(find.text('Status: Current messages'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Deleted messages').last);
+    await tester.pumpAndSettle();
+    expect(api.lastQuery?['Status'], 'DELETED');
+    expect(find.text('Muru'), findsOneWidget);
+    expect(find.byTooltip('Delete message'), findsNothing);
+    await tester.tap(find.text('Status: Deleted messages'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All messages').last);
+    await tester.pumpAndSettle();
+    expect(api.lastQuery?['Status'], 'ALL');
+    expect(find.text('Muru'), findsOneWidget);
+  });
   testWidgets(
     'New message validates and preselects the inbox customer/contact',
     (tester) async {
@@ -189,7 +259,7 @@ void main() {
       await tester.tap(find.text('Muru'));
       await tester.pumpAndSettle();
       expect(api.calls, contains('ReadPortalMessage'));
-      expect(find.text('Delete'), findsNothing);
+      expect(find.text('Delete'), findsOneWidget);
       await tester.tap(find.text('Reply'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Reply to: Muru'), findsOneWidget);
