@@ -1,11 +1,10 @@
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
 import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
+import 'package:ticket_tracker_app/widgets/portal_loading.dart';
 
 class SendMessageScreen extends StatefulWidget {
   const SendMessageScreen({Key? key}) : super(key: key);
@@ -28,6 +27,8 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   List<Map<String, dynamic>> _employeeRecipients = [];
   String? _selectedEmployeeId;
   bool _sendToEmployee = false;
+  bool _loadingGroups = true;
+  bool _loadingEmployees = false;
 
   bool get _isUrgentSelection =>
       !_sendToEmployee &&
@@ -47,7 +48,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
 
     // ✅ Autofocus after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _messageFocusNode.requestFocus();
+      if (mounted) _messageFocusNode.requestFocus();
     });
   }
 
@@ -66,37 +67,54 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
   }
 
   Future<void> _fetchMessageToList() async {
-    final url = Uri.parse(
-      '${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}',
-    );
-    final response = await diagnosticHttpClient.get(
-      url,
-      headers: {
-        'Authorization': 'Bearer ${Constants.accessToken}',
-        'Accept': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> jsonList = json.decode(response.body);
-      setState(() {
-        _messageToOptions = jsonList
-            .map((e) => e['Option'].toString())
-            .where((option) => option != 'O' && option != '-- No Selection --')
-            .toList();
-        _selectedMessageTo = _messageToOptions.isNotEmpty
-            ? _messageToOptions.first
-            : null;
-        debugPrint('Loaded ${_messageToOptions.length} message recipients');
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to load recipient list')),
+    try {
+      final url = Uri.parse(
+        '${Constants.baseUrlData}GetMessageToList?QBLinkKey=${Constants.qbLinkKey}',
       );
+      final response = await diagnosticHttpClient.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer ${Constants.accessToken}',
+          'Accept': 'application/json',
+        },
+      );
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final List<dynamic> jsonList = json.decode(response.body);
+        setState(() {
+          _messageToOptions = jsonList
+              .map((e) => e['Option'].toString())
+              .where(
+                (option) => option != 'O' && option != '-- No Selection --',
+              )
+              .toList();
+          _selectedMessageTo = _messageToOptions.isNotEmpty
+              ? _messageToOptions.first
+              : null;
+          debugPrint('Loaded ${_messageToOptions.length} message recipients');
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load recipient list')),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Unable to load recipients. Please reopen the message window.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _loadingGroups = false);
     }
   }
 
   Future<void> _fetchEmployeeRecipients() async {
+    setState(() => _loadingEmployees = true);
     try {
       final recipients = await APIHelper.getEmployeeRecipients();
       if (!mounted) return;
@@ -109,6 +127,8 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to load employees: $error')),
       );
+    } finally {
+      if (mounted) setState(() => _loadingEmployees = false);
     }
   }
 
@@ -187,6 +207,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
       },
       body: body,
     );
+    if (!mounted) return;
 
     if (response.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -203,7 +224,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
         context,
         'Your message has been successfully sent to Porter Lee Corporation.',
       );
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
     } else {
       debugPrint('Send message failed with status ${response.statusCode}');
       ScaffoldMessenger.of(
@@ -228,6 +249,8 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_loadingGroups || (_sendToEmployee && _loadingEmployees))
+                  const PortalLoading(message: 'Loading recipients...'),
                 const Text(
                   'Agency: Porter Lee',
                   style: TextStyle(fontSize: 16),
@@ -293,6 +316,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                   )
                 else
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     value: _selectedMessageTo,
                     items: _messageToOptions
                         .map(
@@ -381,7 +405,7 @@ class _SendMessageScreenState extends State<SendMessageScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 60),
+                const SizedBox(height: 8),
               ],
             ),
           ),

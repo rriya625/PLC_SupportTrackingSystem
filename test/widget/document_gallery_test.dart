@@ -5,6 +5,77 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ticket_tracker_app/screens/document_gallery.dart';
 
 void main() {
+  testWidgets('Small document popup keeps Download and final Close together', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DocumentGallery(
+            documents: const [
+              {'FileName': 'A long Word document name.docx'},
+            ],
+            loadDocument: (_) async => {'Base64Content': 'YWJj'},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('document-popup-content')))
+          .width,
+      lessThanOrEqualTo(288),
+    );
+    expect(
+      tester.getCenter(find.text('Close')).dx,
+      greaterThan(tester.getCenter(find.text('Download')).dx),
+    );
+    expect(
+      (tester.getCenter(find.text('Close')).dy -
+              tester.getCenter(find.text('Download')).dy)
+          .abs(),
+      lessThan(2),
+    );
+  });
+
+  testWidgets(
+    'Phone document rows keep visible View Download and Delete controls',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var viewed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 230,
+              child: DocumentListItem(
+                fileName: 'Button will be visible based on beast.docx',
+                onView: () => viewed = true,
+                onDownload: () async {},
+                onDelete: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('View'));
+      expect(viewed, isTrue);
+      expect(find.byTooltip('Download'), findsOneWidget);
+      expect(find.byTooltip('Delete'), findsOneWidget);
+    },
+  );
+
   testWidgets(
     'Gallery previews images and downloads other files without decoding changes',
     (tester) async {
@@ -120,6 +191,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(loads, 0);
       expect(find.text('Preview not supported'), findsOneWidget);
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('document-popup-content')))
+            .height,
+        lessThan(450),
+      );
+      expect(
+        (tester.getCenter(find.text('Close')).dy -
+                tester.getCenter(find.text('Download')).dy)
+            .abs(),
+        lessThan(2),
+      );
       await tester.tap(find.text('Download'));
       await tester.pump();
       expect(loads, 1);

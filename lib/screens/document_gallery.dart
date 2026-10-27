@@ -11,6 +11,62 @@ const documentBusyIndicator = SizedBox(
   child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1565C0)),
 );
 
+class DocumentListItem extends StatelessWidget {
+  const DocumentListItem({
+    super.key,
+    required this.fileName,
+    this.subtitle,
+    required this.onView,
+    required this.onDownload,
+    this.onDelete,
+  });
+  final String fileName;
+  final String? subtitle;
+  final VoidCallback onView;
+  final Future<void> Function() onDownload;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final actions = Wrap(
+        alignment: WrapAlignment.end,
+        children: [
+          TextButton.icon(
+            onPressed: onView,
+            icon: const Icon(Icons.visibility_outlined),
+            label: const Text('View'),
+          ),
+          DocumentDownloadButton(onDownload: onDownload),
+          if (onDelete != null)
+            IconButton(
+              tooltip: 'Delete',
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline),
+            ),
+        ],
+      );
+      final compact = constraints.maxWidth < 500;
+      return Padding(
+        padding: const EdgeInsets.only(right: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(fileName),
+              subtitle: subtitle == null ? null : Text(subtitle!),
+              onTap: onView,
+              trailing: compact ? null : actions,
+            ),
+            if (compact)
+              Align(alignment: Alignment.centerRight, child: actions),
+          ],
+        ),
+      );
+    },
+  );
+}
+
 class DocumentDownloadButton extends StatefulWidget {
   final Future<void> Function() onDownload;
   const DocumentDownloadButton({super.key, required this.onDownload});
@@ -23,7 +79,9 @@ class _DocumentDownloadButtonState extends State<DocumentDownloadButton> {
   @override
   Widget build(BuildContext context) => IconButton(
     tooltip: busy ? 'Downloading...' : 'Download',
-    icon: busy ? documentBusyIndicator : const Icon(Icons.download),
+    icon: busy
+        ? documentBusyIndicator
+        : const Icon(Icons.download, color: Color(0xFF1565C0)),
     onPressed: busy
         ? null
         : () async {
@@ -97,10 +155,14 @@ class DocumentGallery extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Dialog(
     insetPadding: const EdgeInsets.all(16),
-    child: SizedBox(
-      width: 1100,
-      height: MediaQuery.sizeOf(context).height * .85,
+    child: ConstrainedBox(
+      key: const ValueKey('document-popup-content'),
+      constraints: BoxConstraints(
+        maxWidth: documents.length == 1 ? 760 : 1100,
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           AppBar(
             automaticallyImplyLeading: false,
@@ -109,14 +171,19 @@ class DocumentGallery extends StatelessWidget {
               icon: const Icon(Icons.arrow_back),
               onPressed: () => Navigator.pop(context),
             ),
-            title: const Text('View and Download Documents'),
+            title: const Text(
+              'View and Download Documents',
+              maxLines: 2,
+              style: TextStyle(fontSize: 18),
+            ),
             backgroundColor: Colors.blue,
             foregroundColor: Colors.white,
           ),
-          Expanded(
+          Flexible(
             child: documents.isEmpty
                 ? const Center(child: Text('No documents available.'))
                 : ListView.builder(
+                    shrinkWrap: true,
                     padding: const EdgeInsets.all(16),
                     itemCount: documents.length,
                     itemBuilder: (context, index) => _DocumentPreview(
@@ -124,17 +191,23 @@ class DocumentGallery extends StatelessWidget {
                       document: documents[index],
                       loadDocument: loadDocument,
                       saveDocument: saveDocument,
-                      previewHeight: documents.length == 1 ? 400 : 200,
+                      previewHeight: documents.length == 1
+                          ? (MediaQuery.sizeOf(context).height * .5).clamp(
+                              160.0,
+                              400.0,
+                            )
+                          : 200,
                     ),
                   ),
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+          if (documents.isEmpty)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
             ),
-          ),
         ],
       ),
     ),
@@ -280,13 +353,24 @@ class _DocumentPreviewState extends State<_DocumentPreview>
             ),
           if (downloadError != null)
             Text(downloadError!, style: const TextStyle(color: Colors.red)),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton.icon(
-              onPressed: saving ? null : _save,
-              icon: saving ? documentBusyIndicator : const Icon(Icons.download),
-              label: Text(saving ? 'Downloading...' : 'Download'),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Flexible(
+                child: ElevatedButton.icon(
+                  onPressed: saving ? null : _save,
+                  icon: saving
+                      ? documentBusyIndicator
+                      : const Icon(Icons.download),
+                  label: Text(saving ? 'Downloading...' : 'Download'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
           ),
           const Divider(),
         ],

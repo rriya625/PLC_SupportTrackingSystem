@@ -59,7 +59,11 @@ class FakeMessages extends MessagesApi {
 }
 
 void main() {
-  for (final size in [const Size(1440, 900), const Size(390, 844)]) {
+  for (final size in [
+    const Size(1440, 900),
+    const Size(390, 844),
+    const Size(320, 568),
+  ]) {
     testWidgets('Inbox and customer reply at $size', (tester) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
@@ -167,7 +171,10 @@ void main() {
     await tester.enterText(picker, 'Mu');
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
-    final editor = find.descendant(of: picker, matching: find.byType(EditableText));
+    final editor = find.descendant(
+      of: picker,
+      matching: find.byType(EditableText),
+    );
     expect(tester.widget<EditableText>(editor).focusNode.hasFocus, isTrue);
     await tester.tap(find.text('Murugan').last);
     await tester.pumpAndSettle();

@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:ticket_tracker_app/utils/spinner_helper.dart';
 import 'package:ticket_tracker_app/utils/upload_files_interface.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
+import 'package:ticket_tracker_app/widgets/portal_loading.dart';
 
 /// Report Issue screen for creating a new support ticket.
 class ReportIssueScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
       'Priority 1 is for urgent issues. Please call the Porter Lee support '
       'line at (847) 985-2060 after submitting so the support team can respond promptly.';
   List<String> _priorityOptions = [];
+  bool _loadingPriorities = true;
   List<Map<String, dynamic>> _pendingWebFiles = [];
   String _selectedPriority = 'Normal';
 
@@ -220,6 +222,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   Future<void> _loadPriorityOptions() async {
     try {
       final codeList = await APIHelper.getCodeList("PRIORITY");
+      if (!mounted) return;
       print('Priority options received: $codeList');
       setState(() {
         _priorityOptions = codeList
@@ -232,10 +235,13 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
         );
       });
     } catch (e) {
+      if (!mounted) return;
       print('Failed to load priorities: $e');
       setState(() {
         _priorityOptions = ['Normal'];
       });
+    } finally {
+      if (mounted) setState(() => _loadingPriorities = false);
     }
   }
 
@@ -252,397 +258,424 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
           automaticallyImplyLeading: true,
         ),
         backgroundColor: Colors.white,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                // Priority Dropdown
-                _buildDropdownField(
-                  label: 'Priority',
-                  value: _selectedPriority,
-                  items: _priorityOptions,
-                  onChanged: (val) {
-                    if (val == null) return;
-                    setState(() => _selectedPriority = val);
-                    if (_isPriorityOne) _showPriorityOneReminder();
-                  },
-                ),
-                if (_isPriorityOne) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade100,
-                      border: Border.all(color: Colors.orange.shade700),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.phone_in_talk,
-                          color: Colors.orange.shade900,
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text(
-                            _urgentSupportReminder,
-                            style: TextStyle(fontWeight: FontWeight.w600),
+        body: _loadingPriorities
+            ? const Center(
+                child: PortalLoading(message: 'Loading ticket form...'),
+              )
+            : SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      // Priority Dropdown
+                      _buildDropdownField(
+                        label: 'Priority',
+                        value: _selectedPriority,
+                        items: _priorityOptions,
+                        onChanged: (val) {
+                          if (val == null) return;
+                          setState(() => _selectedPriority = val);
+                          if (_isPriorityOne) _showPriorityOneReminder();
+                        },
+                      ),
+                      if (_isPriorityOne) ...[
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            border: Border.all(color: Colors.orange.shade700),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.phone_in_talk,
+                                color: Colors.orange.shade900,
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  _urgentSupportReminder,
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ],
 
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Short Description',
-                  controller: _shortDescController,
-                  isRequired: true,
-                  errorText: shortDescError,
-                  maxLength: 250,
-                  focusNode: _shortDescFocus,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Detailed Description',
-                  controller: _detailedDescController,
-                  maxLines: 4,
-                  isRequired: true,
-                  errorText: detailedDescError,
-                  maxLength: 4000,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Customer Ref',
-                  controller: _customerRefController,
-                  maxLength: 20,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Sharepoint Link',
-                  controller: _customerSharepointLink,
-                  maxLength: 250,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Send Confirmation To',
-                  controller: _confirmationToController,
-                  maxLength: 50,
-                ),
+                      const SizedBox(height: 16),
+                      _buildTextField(
+                        label: 'Short Description',
+                        controller: _shortDescController,
+                        isRequired: true,
+                        errorText: shortDescError,
+                        maxLength: 250,
+                        focusNode: _shortDescFocus,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTextField(
+                        label: 'Detailed Description',
+                        controller: _detailedDescController,
+                        maxLines: 4,
+                        isRequired: true,
+                        errorText: detailedDescError,
+                        maxLength: 4000,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTextField(
+                        label: 'Customer Ref',
+                        controller: _customerRefController,
+                        maxLength: 20,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTextField(
+                        label: 'Sharepoint Link',
+                        controller: _customerSharepointLink,
+                        maxLength: 250,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTextField(
+                        label: 'Send Confirmation To',
+                        controller: _confirmationToController,
+                        maxLength: 50,
+                      ),
 
-                const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                // Upload File Button Only
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (kIsWeb) {
-                            //showUploadSpinner('Preparing preview...');
-                            pickFilesForWeb(
-                              pendingFiles: _pendingWebFiles,
-                              updateUI: () {
-                                setState(() {});
+                      // Upload File Button Only
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                if (kIsWeb) {
+                                  //showUploadSpinner('Preparing preview...');
+                                  pickFilesForWeb(
+                                    pendingFiles: _pendingWebFiles,
+                                    updateUI: () {
+                                      setState(() {});
+                                      print(
+                                        "🧩 Files picked for web upload: ${_pendingWebFiles.length}",
+                                      );
+                                      for (var file in _pendingWebFiles) {
+                                        print(
+                                          "📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes",
+                                        );
+                                      }
+                                      if (mounted) {
+                                        hideUploadSpinner();
+                                        _showWebFilesPreviewDialog();
+                                      }
+                                    },
+                                  );
+                                } else {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (BuildContext context) {
+                                      return Wrap(
+                                        children: [
+                                          ListTile(
+                                            leading: Icon(Icons.camera_alt),
+                                            title: Text('Take Photo'),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickImageFromCamera();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.videocam),
+                                            title: Text('Record Video'),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickVideoFromCamera();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.photo_library),
+                                            title: Text(
+                                              'Choose Photo from Gallery',
+                                            ),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickImageFromGallery();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.video_library),
+                                            title: Text(
+                                              'Choose Video from Gallery',
+                                            ),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickVideoFromGallery();
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                _pendingWebFiles.isEmpty
+                                    ? 'Attach File'
+                                    : 'Attach More Files (${_pendingWebFiles.length} selected)',
+                                style: const TextStyle(color: Colors.black),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_attachedImages.isNotEmpty ||
+                          _pendingWebFiles.isNotEmpty)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: GestureDetector(
+                            onTap: () {
+                              if (kIsWeb) {
+                                _showWebFilesPreviewDialog();
+                              } else {
+                                _showMediaPreviewDialogOnly(context);
+                              }
+                            },
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: Text(
+                                kIsWeb
+                                    ? 'Files Attached: ${_pendingWebFiles.length}'
+                                    : 'Files Attached: ${_attachedImages.length}',
+                                style: const TextStyle(
+                                  decoration: TextDecoration.underline,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+
+                      // Submit Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            showUploadSpinner('Uploading ticket and files...');
+
+                            final shortDesc = _shortDescController.text.trim();
+                            final longDesc = _detailedDescController.text
+                                .trim();
+
+                            setState(() {
+                              shortDescError = shortDesc.isEmpty
+                                  ? 'This field is required'
+                                  : null;
+                              detailedDescError = longDesc.isEmpty
+                                  ? 'This field is required'
+                                  : null;
+                            });
+                            if (shortDescError != null ||
+                                detailedDescError != null) {
+                              Navigator.of(context, rootNavigator: true).pop();
+                              return;
+                            }
+
+                            final priority = _selectedPriority
+                                .split(' - ')
+                                .first;
+                            final customerReference = _customerRefController
+                                .text
+                                .trim();
+                            final confirmationTo = _confirmationToController
+                                .text
+                                .trim();
+                            final qbLinkKey = Constants.qbLinkKey;
+                            final userId = Constants.userID;
+                            final sharepointLink = _customerSharepointLink.text
+                                .trim();
+
+                            try {
+                              final response = await APIHelper.createTicket(
+                                prospectKey: userId,
+                                priority: priority,
+                                shortDesc: shortDesc,
+                                qbLinkKey: qbLinkKey,
+                                customerReference: customerReference,
+                                longDesc: longDesc,
+                                confirmationEmail: confirmationTo,
+                                SharepointLink: sharepointLink,
+                              );
+                              print('Create Ticket Response: $response');
+
+                              final ticketKey = response['Ticket Key'];
+
+                              // Upload attached images to the created ticket
+
+                              //print("🎫 Ticket Key: $ticketKey");
+                              try {
+                                //final ticketKey = response['Ticket Key'];
+                                print("🎫 Ticket Key: $ticketKey");
                                 print(
-                                  "🧩 Files picked for web upload: ${_pendingWebFiles.length}",
+                                  "📂 Pending web files count: ${_pendingWebFiles.length}",
                                 );
                                 for (var file in _pendingWebFiles) {
                                   print(
-                                    "📄 File: ${file['sFileName']} | Size: ${file['Base64Content']?.length ?? 0} bytes",
+                                    "📄 Queued file: ${file['sFileName']} | Base64 Length: ${file['Base64Content']?.length ?? 0}",
                                   );
                                 }
-                                if (mounted) {
-                                  hideUploadSpinner();
-                                  _showWebFilesPreviewDialog();
+                              } catch (e) {
+                                print(
+                                  "❌ Error while processing ticketKey or logging: $e",
+                                );
+                              }
+
+                              print(
+                                "🧪 _attachedImages.isNotEmpty: ${_attachedImages.isNotEmpty}",
+                              );
+                              print(
+                                "🧪 _pendingWebFiles.isNotEmpty: ${_pendingWebFiles.isNotEmpty}",
+                              );
+                              print("🧪 kIsWeb: $kIsWeb");
+
+                              if (_attachedImages.isNotEmpty ||
+                                  (kIsWeb && _pendingWebFiles.isNotEmpty)) {
+                                try {
+                                  print("try upload ....");
+                                  if (kIsWeb) {
+                                    if (_pendingWebFiles.isEmpty) {
+                                      hideUploadSpinner();
+                                      return;
+                                    }
+
+                                    print("🚀 Calling uploadPickedFilesWeb...");
+                                    await uploadPickedFilesWeb(
+                                      int.parse(ticketKey.toString()),
+                                      _pendingWebFiles,
+                                    );
+                                    print("✅ Finished uploadPickedFilesWeb");
+
+                                    _pendingWebFiles.clear();
+
+                                    if (context.mounted) {
+                                      await _showUploadResultDialog(
+                                        context,
+                                        200,
+                                      );
+                                    }
+                                  } else {
+                                    final filesToUpload = _attachedImages
+                                        .whereType<File>()
+                                        .toList();
+
+                                    final response =
+                                        await APIHelper.uploadFiles(
+                                          ticketKey: int.parse(
+                                            ticketKey.toString(),
+                                          ),
+                                          prospectKey: Constants.userID,
+                                          fileList: filesToUpload,
+                                        );
+
+                                    if (context.mounted) {
+                                      await _showUploadResultDialog(
+                                        context,
+                                        response.statusCode,
+                                      );
+                                    }
+                                  }
+
+                                  setState(() => _attachedImages.clear());
+                                } catch (e) {
+                                  print('try catch $e');
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('File upload failed: $e'),
+                                    ),
+                                  );
                                 }
-                              },
-                            );
-                          } else {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (BuildContext context) {
-                                return Wrap(
-                                  children: [
-                                    ListTile(
-                                      leading: Icon(Icons.camera_alt),
-                                      title: Text('Take Photo'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickImageFromCamera();
-                                      },
+                              }
+
+                              hideUploadSpinner();
+
+                              // ✅ Only navigate now
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Ticket created: #$ticketKey',
                                     ),
-                                    ListTile(
-                                      leading: Icon(Icons.videocam),
-                                      title: Text('Record Video'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickVideoFromCamera();
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: Icon(Icons.photo_library),
-                                      title: Text('Choose Photo from Gallery'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickImageFromGallery();
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: Icon(Icons.video_library),
-                                      title: Text('Choose Video from Gallery'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickVideoFromGallery();
-                                      },
-                                    ),
-                                  ],
+                                  ),
                                 );
-                              },
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          _pendingWebFiles.isEmpty
-                              ? 'Attach File'
-                              : 'Attach More Files (${_pendingWebFiles.length} selected)',
-                          style: const TextStyle(color: Colors.black),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (_attachedImages.isNotEmpty || _pendingWebFiles.isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (kIsWeb) {
-                          _showWebFilesPreviewDialog();
-                        } else {
-                          _showMediaPreviewDialogOnly(context);
-                        }
-                      },
-                      child: MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: Text(
-                          kIsWeb
-                              ? 'Files Attached: ${_pendingWebFiles.length}'
-                              : 'Files Attached: ${_attachedImages.length}',
-                          style: const TextStyle(
-                            decoration: TextDecoration.underline,
-                            color: Colors.blue,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 24),
-
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      showUploadSpinner('Uploading ticket and files...');
-
-                      final shortDesc = _shortDescController.text.trim();
-                      final longDesc = _detailedDescController.text.trim();
-
-                      setState(() {
-                        shortDescError = shortDesc.isEmpty
-                            ? 'This field is required'
-                            : null;
-                        detailedDescError = longDesc.isEmpty
-                            ? 'This field is required'
-                            : null;
-                      });
-                      if (shortDescError != null || detailedDescError != null) {
-                        Navigator.of(context, rootNavigator: true).pop();
-                        return;
-                      }
-
-                      final priority = _selectedPriority.split(' - ').first;
-                      final customerReference = _customerRefController.text
-                          .trim();
-                      final confirmationTo = _confirmationToController.text
-                          .trim();
-                      final qbLinkKey = Constants.qbLinkKey;
-                      final userId = Constants.userID;
-                      final sharepointLink = _customerSharepointLink.text
-                          .trim();
-
-                      try {
-                        final response = await APIHelper.createTicket(
-                          prospectKey: userId,
-                          priority: priority,
-                          shortDesc: shortDesc,
-                          qbLinkKey: qbLinkKey,
-                          customerReference: customerReference,
-                          longDesc: longDesc,
-                          confirmationEmail: confirmationTo,
-                          SharepointLink: sharepointLink,
-                        );
-                        print('Create Ticket Response: $response');
-
-                        final ticketKey = response['Ticket Key'];
-
-                        // Upload attached images to the created ticket
-
-                        //print("🎫 Ticket Key: $ticketKey");
-                        try {
-                          //final ticketKey = response['Ticket Key'];
-                          print("🎫 Ticket Key: $ticketKey");
-                          print(
-                            "📂 Pending web files count: ${_pendingWebFiles.length}",
-                          );
-                          for (var file in _pendingWebFiles) {
-                            print(
-                              "📄 Queued file: ${file['sFileName']} | Base64 Length: ${file['Base64Content']?.length ?? 0}",
-                            );
-                          }
-                        } catch (e) {
-                          print(
-                            "❌ Error while processing ticketKey or logging: $e",
-                          );
-                        }
-
-                        print(
-                          "🧪 _attachedImages.isNotEmpty: ${_attachedImages.isNotEmpty}",
-                        );
-                        print(
-                          "🧪 _pendingWebFiles.isNotEmpty: ${_pendingWebFiles.isNotEmpty}",
-                        );
-                        print("🧪 kIsWeb: $kIsWeb");
-
-                        if (_attachedImages.isNotEmpty ||
-                            (kIsWeb && _pendingWebFiles.isNotEmpty)) {
-                          try {
-                            print("try upload ....");
-                            if (kIsWeb) {
-                              if (_pendingWebFiles.isEmpty) {
-                                hideUploadSpinner();
-                                return;
-                              }
-
-                              print("🚀 Calling uploadPickedFilesWeb...");
-                              await uploadPickedFilesWeb(
-                                int.parse(ticketKey.toString()),
-                                _pendingWebFiles,
-                              );
-                              print("✅ Finished uploadPickedFilesWeb");
-
-                              _pendingWebFiles.clear();
-
-                              if (context.mounted) {
-                                await _showUploadResultDialog(context, 200);
-                              }
-                            } else {
-                              final filesToUpload = _attachedImages
-                                  .whereType<File>()
-                                  .toList();
-
-                              final response = await APIHelper.uploadFiles(
-                                ticketKey: int.parse(ticketKey.toString()),
-                                prospectKey: Constants.userID,
-                                fileList: filesToUpload,
-                              );
-
-                              if (context.mounted) {
-                                await _showUploadResultDialog(
+                                Navigator.push(
                                   context,
-                                  response.statusCode,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const TicketDescriptionScreenStateful(),
+                                    settings: RouteSettings(
+                                      arguments: ticketKey.toString(),
+                                    ),
+                                  ),
                                 );
                               }
+
+                              // Clear fields after successful submission
+                              setState(() {
+                                _shortDescController.clear();
+                                _detailedDescController.clear();
+                                _customerRefController.clear();
+                                _customerSharepointLink.clear();
+                                _confirmationToController.text =
+                                    _initialConfirmationEmail;
+                                _selectedPriority = _priorityOptions.firstWhere(
+                                  (item) => item.startsWith("5 -"),
+                                  orElse: () => _priorityOptions.isNotEmpty
+                                      ? _priorityOptions[0]
+                                      : 'Normal',
+                                );
+                              });
+                            } catch (e) {
+                              Navigator.of(context, rootNavigator: true).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to create ticket: $e'),
+                                ),
+                              );
                             }
-
-                            setState(() => _attachedImages.clear());
-                          } catch (e) {
-                            print('try catch $e');
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('File upload failed: $e')),
-                            );
-                          }
-                        }
-
-                        hideUploadSpinner();
-
-                        // ✅ Only navigate now
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Ticket created: #$ticketKey'),
+                          },
+                          icon: const Icon(Icons.send),
+                          label: const Text('Submit'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.lightBlueAccent,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const TicketDescriptionScreenStateful(),
-                              settings: RouteSettings(
-                                arguments: ticketKey.toString(),
-                              ),
-                            ),
-                          );
-                        }
-
-                        // Clear fields after successful submission
-                        setState(() {
-                          _shortDescController.clear();
-                          _detailedDescController.clear();
-                          _customerRefController.clear();
-                          _customerSharepointLink.clear();
-                          _confirmationToController.text =
-                              _initialConfirmationEmail;
-                          _selectedPriority = _priorityOptions.firstWhere(
-                            (item) => item.startsWith("5 -"),
-                            orElse: () => _priorityOptions.isNotEmpty
-                                ? _priorityOptions[0]
-                                : 'Normal',
-                          );
-                        });
-                      } catch (e) {
-                        Navigator.of(context, rootNavigator: true).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to create ticket: $e'),
                           ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.send),
-                    label: const Text('Submit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.lightBlueAccent,
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    ),
+
+                      const SizedBox(height: 30),
+
+                      // Bottom icon image
+                      //const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 30),
-
-                // Bottom icon image
-                //const Icon(Icons.task_alt_rounded, size: 90, color: Colors.green),
-              ],
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }

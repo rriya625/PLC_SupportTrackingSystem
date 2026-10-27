@@ -470,77 +470,84 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
         automaticallyImplyLeading: true,
       ),
       backgroundColor: Colors.white,
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Custom expandable header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Search Filters',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: Icon(
-                    _filtersExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
+      body: LayoutBuilder(
+        builder: (context, available) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Custom expandable header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Search Filters',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  onPressed: () {
-                    setState(() => _filtersExpanded = !_filtersExpanded);
+                  IconButton(
+                    icon: Icon(
+                      _filtersExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                    ),
+                    onPressed: () {
+                      setState(() => _filtersExpanded = !_filtersExpanded);
+                    },
+                  ),
+                ],
+              ),
+              // Expanded filter UI
+              if (_filtersExpanded) ...[
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: available.maxHeight * .7,
+                  ),
+                  child: SingleChildScrollView(child: _buildFilters()),
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              Text(
+                'Total Tickets: ${tickets.length}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Ticket list
+              Expanded(
+                child: ListView.builder(
+                  itemCount: tickets.length,
+                  itemBuilder: (context, index) {
+                    final ticket = tickets[index];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const TicketDescriptionScreenStateful(),
+                            settings: RouteSettings(
+                              arguments: ticket['TicketKey'],
+                            ),
+                          ),
+                        );
+                      },
+                      child: _buildTicketCard(
+                        ticketKey: ticket['TicketKey'] ?? '',
+                        date:
+                            'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
+                        shortDesc: ticket['ShortDesc'] ?? '',
+                      ),
+                    );
                   },
                 ),
-              ],
-            ),
-            // Expanded filter UI
-            if (_filtersExpanded) ...[
-              _buildFilters(),
-              const SizedBox(height: 20),
+              ),
             ],
-
-            Text(
-              'Total Tickets: ${tickets.length}',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey[700],
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // Ticket list
-            Expanded(
-              child: ListView.builder(
-                itemCount: tickets.length,
-                itemBuilder: (context, index) {
-                  final ticket = tickets[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              const TicketDescriptionScreenStateful(),
-                          settings: RouteSettings(
-                            arguments: ticket['TicketKey'],
-                          ),
-                        ),
-                      );
-                    },
-                    child: _buildTicketCard(
-                      ticketKey: ticket['TicketKey'] ?? '',
-                      date:
-                          'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
-                      shortDesc: ticket['ShortDesc'] ?? '',
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -760,113 +767,95 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
           ),
 
           const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildDropdown(
-                            'Sort By',
-                            Constants.isEmployee
-                                ? _employeeSortFields
-                                : ['Last Activity', 'Start Date'],
-                            sortBy,
-                            (val) => setState(() => sortBy = val!),
-                          ),
-                        ),
-                        if (Constants.isEmployee) ...[
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 110,
-                            child: _buildDropdown(
-                              'Direction',
-                              const ['ASC', 'DESC'],
-                              sortDirection,
-                              (val) => setState(() => sortDirection = val!),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (Constants.isEmployee)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(
-                          spacing: 8,
-                          children: [
-                            TextButton(
-                              onPressed: _saveSortPreference,
-                              child: const Text('Save as default'),
-                            ),
-                            TextButton(
-                              onPressed: _resetSortPreference,
-                              child: const Text('Reset'),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Right: Buttons with vertical alignment fix
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    top: 30.0,
-                  ), // 👈 Adjust this value as needed
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: Wrap(
-                      spacing: 6,
-                      children: [
-                        SizedBox(
-                          width: 85,
-                          child: ElevatedButton(
-                            onPressed: _fetchAndSetTickets,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.lightBlueAccent,
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text('Search'),
-                          ),
-                        ),
-                        SizedBox(
-                          width: 85,
-                          child: ElevatedButton(
-                            onPressed: _exportToExcel,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  Colors.lightBlueAccent, //greenAccent,
-                              foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text('Export'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildSortAndActions(),
         ],
       ),
     );
   }
+
+  Widget _buildSortAndActions() => LayoutBuilder(
+    builder: (context, constraints) {
+      final sort = Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdown(
+                  'Sort By',
+                  Constants.isEmployee
+                      ? _employeeSortFields
+                      : ['Last Activity', 'Start Date'],
+                  sortBy,
+                  (val) => setState(() => sortBy = val!),
+                ),
+              ),
+              if (Constants.isEmployee) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 110,
+                  child: _buildDropdown(
+                    'Direction',
+                    const ['ASC', 'DESC'],
+                    sortDirection,
+                    (val) => setState(() => sortDirection = val!),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (Constants.isEmployee)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: _saveSortPreference,
+                    child: const Text('Save as default'),
+                  ),
+                  TextButton(
+                    onPressed: _resetSortPreference,
+                    child: const Text('Reset'),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      );
+      final actions = Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ElevatedButton(
+            onPressed: _fetchAndSetTickets,
+            child: const Text('Search'),
+          ),
+          ElevatedButton(
+            onPressed: _exportToExcel,
+            child: const Text('Export'),
+          ),
+        ],
+      );
+      if (constraints.maxWidth < 600)
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [sort, const SizedBox(height: 12), actions],
+        );
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: sort),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: actions,
+            ),
+          ),
+        ],
+      );
+    },
+  );
 
   Widget _buildDepartmentDropdown() {
     final selectedIsValid = departments.any(

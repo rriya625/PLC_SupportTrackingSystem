@@ -23,6 +23,21 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       scrollBehavior: const PortalScrollBehavior(),
       theme: ThemeData(
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: Color(0xFF1565C0),
+        ),
+        dialogTheme: const DialogThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+          clipBehavior: Clip.antiAlias,
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+          ),
+          clipBehavior: Clip.antiAlias,
+        ),
         scrollbarTheme: const ScrollbarThemeData(
           thumbVisibility: WidgetStatePropertyAll(true),
           trackVisibility: WidgetStatePropertyAll(true),

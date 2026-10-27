@@ -5,6 +5,8 @@ import 'package:ticket_tracker_app/screens/view_activity.dart';
 import 'package:ticket_tracker_app/screens/message_history.dart';
 import 'send_message_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:ticket_tracker_app/widgets/message_popup.dart';
+import 'package:ticket_tracker_app/widgets/portal_loading.dart';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/api_helper.dart';
 import 'package:http/http.dart' as http;
@@ -31,6 +33,8 @@ class TicketDescriptionScreenStateful extends StatefulWidget {
 class _TicketDescriptionScreenState
     extends State<TicketDescriptionScreenStateful> {
   String ticketKey = '';
+  bool _loading = true;
+  String? _loadError;
   String ticketNumber = '';
   String dateCreated = '';
   String assignedTo = '';
@@ -53,38 +57,48 @@ class _TicketDescriptionScreenState
   void initState() {
     super.initState();
     Future.microtask(() async {
-      final route = ModalRoute.of(context);
-      final args = route?.settings.arguments;
-      ticketKey = args?.toString() ?? '';
-      print('Ticket key received: $ticketKey');
-      if (ticketKey.isNotEmpty) {
-        await _loadStatusDescriptions();
-        final data = await APIHelper.fetchTicketDetails(ticketKey);
-        if (data != null && mounted) {
-          setState(() {
-            ticketNumber = data['TicketKey'] ?? '';
-            dateCreated = data['StartDate'] ?? '';
-            assignedTo = data['EmployeeName'] ?? 'N/A';
-            currentStatus = _statusDisplay(data['Status']);
-            shortDescription = data['ShortDesc'] ?? '';
-            longDescription = _parseRtf(data['LongDesc'] ?? '');
-            _originalShortDescription = data['ShortDesc']?.toString() ?? '';
-            _originalRawLongDescription =
-                (data['RawLongDesc'] ?? data['LongDesc'])?.toString() ?? '';
-            _canEditDescription = portalFlag(data['CanEditDescription']);
-            customerReference = data['CustomerReference'] ?? '';
-            sharepointLink = data['SharepointLink'] ?? '';
-            sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
-            creatorEmail = data['CreatorEmail']?.toString() ?? '';
-            customerAcronym = data['CustomerAcronym']?.toString() ?? '';
-          });
-        } else if (mounted) {
-          setState(() {
-            assignedTo = 'Error loading data';
-          });
+      try {
+        final route = ModalRoute.of(context);
+        final args = route?.settings.arguments;
+        ticketKey = args?.toString() ?? '';
+        print('Ticket key received: $ticketKey');
+        if (ticketKey.isNotEmpty) {
+          await _loadStatusDescriptions();
+          final data = await APIHelper.fetchTicketDetails(ticketKey);
+          if (data != null && mounted) {
+            setState(() {
+              ticketNumber = data['TicketKey'] ?? '';
+              dateCreated = data['StartDate'] ?? '';
+              assignedTo = data['EmployeeName'] ?? 'N/A';
+              currentStatus = _statusDisplay(data['Status']);
+              shortDescription = data['ShortDesc'] ?? '';
+              longDescription = _parseRtf(data['LongDesc'] ?? '');
+              _originalShortDescription = data['ShortDesc']?.toString() ?? '';
+              _originalRawLongDescription =
+                  (data['RawLongDesc'] ?? data['LongDesc'])?.toString() ?? '';
+              _canEditDescription = portalFlag(data['CanEditDescription']);
+              customerReference = data['CustomerReference'] ?? '';
+              sharepointLink = data['SharepointLink'] ?? '';
+              sendConfirmationTo = data['ConfirmationEmailTo'] ?? '';
+              creatorEmail = data['CreatorEmail']?.toString() ?? '';
+              customerAcronym = data['CustomerAcronym']?.toString() ?? '';
+            });
+          } else if (mounted) {
+            setState(() {
+              assignedTo = 'Error loading data';
+            });
+          }
+        } else {
+          print('No ticket key found in route arguments.');
         }
-      } else {
-        print('No ticket key found in route arguments.');
+      } catch (error) {
+        if (mounted)
+          setState(
+            () => _loadError =
+                'Unable to load ticket. Please go back and try again.',
+          );
+      } finally {
+        if (mounted) setState(() => _loading = false);
       }
     });
   }
@@ -119,7 +133,7 @@ class _TicketDescriptionScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        actions: Constants.isEmployee
+        actions: Constants.isEmployee && !_loading && _loadError == null
             ? [
                 IconButton(
                   tooltip: 'Update Ticket',
@@ -145,321 +159,355 @@ class _TicketDescriptionScreenState
         foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildField('Ticket Number:', ticketNumber),
-            _buildField('Date Created:', dateCreated),
-            _buildField('Assigned to:', assignedTo),
-            _buildField('Current Status:', currentStatus),
-            //const SizedBox(height: 2),  //12
-            // New description section with larger box and row header
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 180,
-                  child: Text(
-                    'Description:',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
-                //const Text('Description:', style: TextStyle(fontSize: 16)),
-                const SizedBox(width: 2),
-                Expanded(
-                  child: Text(
-                    shortDescription,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4), //12
-
-            _buildField('Customer Ref:', customerReference),
-
-            _buildField('Send Confirmation To:', sendConfirmationTo),
-
-            // For clickable SharePoint link
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
+      body: _loading
+          ? const Center(child: PortalLoading(message: 'Loading ticket...'))
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_loadError!),
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(
-                    width: 180,
-                    child: Text(
-                      'Sharepoint Link:',
-                      style: TextStyle(fontSize: 16),
+                  _buildField('Ticket Number:', ticketNumber),
+                  _buildField('Date Created:', dateCreated),
+                  _buildField('Assigned to:', assignedTo),
+                  _buildField('Current Status:', currentStatus),
+                  //const SizedBox(height: 2),  //12
+                  // New description section with larger box and row header
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 180,
+                        child: Text(
+                          'Description:',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                      //const Text('Description:', style: TextStyle(fontSize: 16)),
+                      const SizedBox(width: 2),
+                      Expanded(
+                        child: Text(
+                          shortDescription,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4), //12
+
+                  _buildField('Customer Ref:', customerReference),
+
+                  _buildField('Send Confirmation To:', sendConfirmationTo),
+
+                  // For clickable SharePoint link
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(
+                          width: 180,
+                          child: Text(
+                            'Sharepoint Link:',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final url = sharepointLink.startsWith('http')
+                                  ? sharepointLink
+                                  : 'https://${sharepointLink}';
+                              if (await canLaunchUrl(Uri.parse(url))) {
+                                await launchUrl(
+                                  Uri.parse(url),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Could not launch SharePoint link',
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text(
+                              sharepointLink,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () async {
-                        final url = sharepointLink.startsWith('http')
-                            ? sharepointLink
-                            : 'https://${sharepointLink}';
-                        if (await canLaunchUrl(Uri.parse(url))) {
-                          await launchUrl(
-                            Uri.parse(url),
-                            mode: LaunchMode.externalApplication,
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Could not launch SharePoint link'),
-                            ),
-                          );
-                        }
-                      },
+
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 300,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.black),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: SingleChildScrollView(
                       child: Text(
-                        sharepointLink,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
-                        ),
+                        longDescription,
+                        style: const TextStyle(fontSize: 14),
                       ),
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                print("🌐 kIsWeb is $kIsWeb");
+                                if (kIsWeb) {
+                                  // Call the web-specific upload function
+                                  pickAndUploadFilesWeb(
+                                    context: context,
+                                    ticketKey: int.tryParse(ticketKey) ?? 0,
+                                  );
+                                } else {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (BuildContext context) {
+                                      return Wrap(
+                                        children: [
+                                          ListTile(
+                                            leading: Icon(Icons.camera_alt),
+                                            title: Text('Take Photo'),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickImageFromCamera();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.videocam),
+                                            title: Text('Record Video'),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickVideoFromCamera();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.photo_library),
+                                            title: Text(
+                                              'Choose Photo from Gallery',
+                                            ),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickImageFromGallery();
+                                            },
+                                          ),
+                                          ListTile(
+                                            leading: Icon(Icons.video_library),
+                                            title: Text(
+                                              'Choose Video from Gallery',
+                                            ),
+                                            onTap: () {
+                                              Navigator.pop(context);
+                                              _pickVideoFromGallery();
+                                            },
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.upload_file),
+                              label: const Text('Upload Documents'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _showTicketDocuments,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text('View Documents'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                showMessagePopup(
+                                  context,
+                                  builder: (context) =>
+                                      const SendMessageScreen(),
+                                  settings: RouteSettings(arguments: ticketKey),
+                                );
+                              },
+                              icon: const Icon(Icons.send),
+                              label: const Text('Send Message'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const MessageHistoryScreen(),
+                                    settings: RouteSettings(
+                                      arguments: ticketNumber,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.history),
+                              label: const Text('Message History'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                _showUpdateTicketDialog(
+                                  context,
+                                  int.tryParse(ticketKey) ?? 0,
+                                  customerReference,
+                                  sharepointLink,
+                                  sendConfirmationTo,
+                                );
+                              },
+                              icon: const Icon(Icons.update),
+                              label: const Text('Update Ticket'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ViewActivityScreen(
+                                      ticketNumber: ticketNumber,
+                                      shortDescription: shortDescription,
+                                      confirmationEmailTo: creatorEmail,
+                                      customerAcronym: customerAcronym,
+                                    ),
+                                    settings: RouteSettings(
+                                      arguments: ticketNumber,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.timeline),
+                              label: const Text('View Activity'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlueAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  //const Center(child: Icon(Icons.assignment_turned_in, size: 100, color: Colors.green)),
+                  //const SizedBox(height: 30),
                 ],
               ),
             ),
-
-            const SizedBox(height: 12),
-            Container(
-              height: 300,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.black),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              padding: const EdgeInsets.all(12),
-              child: SingleChildScrollView(
-                child: Text(
-                  longDescription,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          print("🌐 kIsWeb is $kIsWeb");
-                          if (kIsWeb) {
-                            // Call the web-specific upload function
-                            pickAndUploadFilesWeb(
-                              context: context,
-                              ticketKey: int.tryParse(ticketKey) ?? 0,
-                            );
-                          } else {
-                            showModalBottomSheet(
-                              context: context,
-                              builder: (BuildContext context) {
-                                return Wrap(
-                                  children: [
-                                    ListTile(
-                                      leading: Icon(Icons.camera_alt),
-                                      title: Text('Take Photo'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickImageFromCamera();
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: Icon(Icons.videocam),
-                                      title: Text('Record Video'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickVideoFromCamera();
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: Icon(Icons.photo_library),
-                                      title: Text('Choose Photo from Gallery'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickImageFromGallery();
-                                      },
-                                    ),
-                                    ListTile(
-                                      leading: Icon(Icons.video_library),
-                                      title: Text('Choose Video from Gallery'),
-                                      onTap: () {
-                                        Navigator.pop(context);
-                                        _pickVideoFromGallery();
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file),
-                        label: const Text('Upload Documents'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _showTicketDocuments,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text('View Documents'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SendMessageScreen(),
-                              settings: RouteSettings(arguments: ticketKey),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.send),
-                        label: const Text('Send Message'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  const MessageHistoryScreen(),
-                              settings: RouteSettings(arguments: ticketNumber),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.history),
-                        label: const Text('Message History'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          _showUpdateTicketDialog(
-                            context,
-                            int.tryParse(ticketKey) ?? 0,
-                            customerReference,
-                            sharepointLink,
-                            sendConfirmationTo,
-                          );
-                        },
-                        icon: const Icon(Icons.update),
-                        label: const Text('Update Ticket'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ViewActivityScreen(
-                                ticketNumber: ticketNumber,
-                                shortDescription: shortDescription,
-                                confirmationEmailTo: creatorEmail,
-                                customerAcronym: customerAcronym,
-                              ),
-                              settings: RouteSettings(arguments: ticketNumber),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.timeline),
-                        label: const Text('View Activity'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.lightBlueAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            //const Center(child: Icon(Icons.assignment_turned_in, size: 100, color: Colors.green)),
-            //const SizedBox(height: 30),
-          ],
-        ),
-      ),
     );
   }
 
   Future<void> _showTicketDocuments() async {
     try {
       List<String> warnings = [];
-      final documents = await APIHelper.getTicketDocuments(
-        int.parse(ticketKey),
-        onWarnings: (value) => warnings = value,
+      final documents = await withPortalLoading(
+        context,
+        'Loading documents...',
+        () => APIHelper.getTicketDocuments(
+          int.parse(ticketKey),
+          onWarnings: (value) => warnings = value,
+        ),
       );
       if (!mounted) return;
       await showDialog<void>(
@@ -475,6 +523,11 @@ class _TicketDescriptionScreenState
             grouped.putIfAbsent(source, () => []).add(document);
           }
           return AlertDialog(
+            insetPadding: const EdgeInsets.all(12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
             backgroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -489,7 +542,10 @@ class _TicketDescriptionScreenState
             ),
             content: SizedBox(
               width: 680,
-              height: 520,
+              height: (MediaQuery.sizeOf(context).height * .55).clamp(
+                120.0,
+                520.0,
+              ),
               child: ListView(
                 children: [
                   for (final warning in warnings)
@@ -508,10 +564,6 @@ class _TicketDescriptionScreenState
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Close'),
-              ),
               FilledButton(
                 onPressed: documents.isEmpty
                     ? null
@@ -545,6 +597,10 @@ class _TicketDescriptionScreenState
                       ),
                 child: const Text('View/Download Documents'),
               ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close'),
+              ),
             ],
           );
         },
@@ -573,27 +629,13 @@ class _TicketDescriptionScreenState
                   int.tryParse(document['HistoryNumber']?.toString() ?? '') ??
                   0;
               final canDelete = portalFlag(document['CanDelete']);
-              return ListTile(
-                title: Text(fileName),
-                onTap: () =>
+              return DocumentListItem(
+                fileName: fileName,
+                onView: () =>
                     showDocumentPreview(context, document, _loadDocument),
-                subtitle: source == 'ACTIVITY'
-                    ? Text('Activity #$history')
-                    : Text(source),
-                trailing: Wrap(
-                  spacing: 4,
-                  children: [
-                    DocumentDownloadButton(
-                      onDownload: () => _downloadDocument(document),
-                    ),
-                    if (canDelete)
-                      IconButton(
-                        tooltip: 'Delete',
-                        onPressed: () => _deleteDocument(document),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                  ],
-                ),
+                subtitle: source == 'ACTIVITY' ? 'Activity #$history' : source,
+                onDownload: () => _downloadDocument(document),
+                onDelete: canDelete ? () => _deleteDocument(document) : null,
               );
             }).toList(),
     );

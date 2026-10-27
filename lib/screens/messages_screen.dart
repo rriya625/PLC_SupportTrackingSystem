@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ticket_tracker_app/widgets/message_popup.dart';
+import 'package:ticket_tracker_app/widgets/portal_loading.dart';
 import 'dart:async';
 import 'package:ticket_tracker_app/constants.dart';
 import 'package:ticket_tracker_app/utils/messages_api.dart';
@@ -55,9 +57,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Future<void> open(Map<String, dynamic> row) async {
     try {
-      final result = await api.call(
-        'ReadPortalMessage',
-        body: {'MessageKey': row['MessageKey']},
+      final result = await withPortalLoading(
+        context,
+        'Loading message...',
+        () => api.call(
+          'ReadPortalMessage',
+          body: {'MessageKey': row['MessageKey']},
+        ),
       );
       if (!mounted) return;
       setState(() => row['Unread'] = false);
@@ -95,9 +101,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
     ),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: () async {
-        await Navigator.push(
+        await showMessagePopup(
           context,
-          MaterialPageRoute(builder: (_) => MessageComposeScreen(api: api)),
+          builder: (_) => MessageComposeScreen(api: api),
         );
         if (mounted) await load();
       },
@@ -106,7 +112,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
     ),
     body: Column(
       children: [
-        if (busy) const LinearProgressIndicator(),
+        if (busy)
+          const Center(child: PortalLoading(message: 'Loading messages...')),
         if (error != null)
           Padding(
             padding: const EdgeInsets.all(16),
@@ -241,13 +248,11 @@ class _MessageDetailState extends State<_MessageDetail> {
                     FilledButton.icon(
                       onPressed: busy
                           ? null
-                          : () => Navigator.push(
+                          : () => showMessagePopup(
                               context,
-                              MaterialPageRoute(
-                                builder: (_) => MessageComposeScreen(
-                                  api: widget.api,
-                                  reply: m,
-                                ),
+                              builder: (_) => MessageComposeScreen(
+                                api: widget.api,
+                                reply: m,
                               ),
                             ),
                       icon: const Icon(Icons.reply),
@@ -448,35 +453,38 @@ class _MessageComposeScreenState extends State<MessageComposeScreen> {
               const SizedBox(height: 24),
               const Text('Send your message to:'),
               if (Constants.isEmployee)
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'GROUP', label: Text('Group')),
-                    ButtonSegment(value: 'EMPLOYEE', label: Text('Employee')),
-                    ButtonSegment(value: 'CUSTOMER', label: Text('Customer')),
-                  ],
-                  selected: {kind},
-                  onSelectionChanged: busy
-                      ? null
-                      : (values) {
-                          setState(() {
-                            kind = values.first;
-                            recipient = null;
-                            options = [];
-                            error = null;
-                            search.clear();
-                          });
-                          if (kind == 'GROUP') {
-                            loadGroups();
-                          } else {
-                            find();
-                          }
-                        },
+                LayoutBuilder(
+                  builder: (context, constraints) => SegmentedButton<String>(
+                    direction: constraints.maxWidth < 340
+                        ? Axis.vertical
+                        : Axis.horizontal,
+                    segments: const [
+                      ButtonSegment(value: 'GROUP', label: Text('Group')),
+                      ButtonSegment(value: 'EMPLOYEE', label: Text('Employee')),
+                      ButtonSegment(value: 'CUSTOMER', label: Text('Customer')),
+                    ],
+                    selected: {kind},
+                    onSelectionChanged: busy
+                        ? null
+                        : (values) {
+                            setState(() {
+                              kind = values.first;
+                              recipient = null;
+                              options = [];
+                              error = null;
+                              search.clear();
+                            });
+                            if (kind == 'GROUP') {
+                              loadGroups();
+                            } else {
+                              find();
+                            }
+                          },
+                  ),
                 ),
               const SizedBox(height: 12),
-              SizedBox(
-                height: 4,
-                child: searching ? const LinearProgressIndicator() : null,
-              ),
+              if (searching)
+                const PortalLoading(message: 'Loading recipients...'),
               LayoutBuilder(
                 builder: (context, constraints) => DropdownMenu<String>(
                   key: ValueKey(kind),

@@ -105,26 +105,35 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
         title: const Text('Activity Documents'),
         content: SizedBox(
           width: 600,
-          height: 360,
+          height: (MediaQuery.sizeOf(context).height * .45).clamp(120.0, 360.0),
           child: ListView(
             children: _documentsFor(number).isEmpty
                 ? [const ListTile(title: Text('No documents attached.'))]
                 : _documentsFor(number)
                       .map(
-                        (d) => ListTile(
-                          leading: const Icon(Icons.insert_drive_file_outlined),
-                          title: Text(d['FileName'].toString()),
-                          trailing: DocumentDownloadButton(
-                            onDownload: () =>
-                                downloadDocumentFile(context, d, _loadDocument),
-                          ),
-                          onTap: () => _openDocument(d),
+                        (d) => DocumentListItem(
+                          fileName: d['FileName'].toString(),
+                          onDownload: () =>
+                              downloadDocumentFile(context, d, _loadDocument),
+                          onView: () => _openDocument(d),
                         ),
                       )
                       .toList(),
           ),
         ),
         actions: [
+          if (_documentsFor(number).isNotEmpty)
+            FilledButton.icon(
+              onPressed: () => showDialog<void>(
+                context: dialogContext,
+                builder: (_) => DocumentGallery(
+                  documents: _documentsFor(number),
+                  loadDocument: _loadDocument,
+                ),
+              ),
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('View/Download Documents'),
+            ),
           if (canUpload)
             FilledButton.icon(
               onPressed: () async {
@@ -182,10 +191,6 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: draft.busy ? null : () => Navigator.pop(c),
-                child: const Text('Close'),
-              ),
               FilledButton(
                 onPressed: draft.busy || draft.files.isEmpty
                     ? null
@@ -198,6 +203,10 @@ class _ViewActivityScreenState extends State<ViewActivityScreen> {
                         }
                       },
                 child: Text(draft.busy ? 'Uploading...' : 'Save Documents'),
+              ),
+              TextButton(
+                onPressed: draft.busy ? null : () => Navigator.pop(c),
+                child: const Text('Close'),
               ),
             ],
           ),
