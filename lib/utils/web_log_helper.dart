@@ -54,7 +54,7 @@ class WebLogHelper {
   }
 
   static Future<void> downloadServerLog({String? date}) async {
-    if (!kIsWeb || !Constants.isDebugModeEnabled) return;
+    if (!kIsWeb || !Constants.canDownloadDiagnosticLogs) return;
     final baseUrl = Constants.logUploadUrl;
     if (baseUrl == null || baseUrl.isEmpty) {
       throw Exception('Diagnostic log endpoint is not configured.');

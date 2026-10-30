@@ -228,7 +228,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
           'AllowDocumentDelete': selectedEmployee && deleteAllowed ? 'T' : 'F',
           'WebViewAllDeptTickets': deptTickets ? 'T' : 'F',
           'AccountDisabled': enabled ? 'F' : 'T',
-          'DebugMode': debug ? 'T' : 'F',
+          'DebugMode': selectedEmployee && debug ? 'T' : 'F',
           'DoNotLoadTicketsOnLoad': skip ? 'T' : 'F',
         },
       );
@@ -239,7 +239,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       u['ACCESS_LEVEL'] = access.toString();
       u['ACCOUNT_DISABLED'] = enabled ? 'F' : 'T';
       u['WEB_VIEW_ALL_DEPT_TICKETS'] = deptTickets ? 'T' : 'F';
-      u['DEBUG_MODE'] = debug ? 'T' : 'F';
+      u['DEBUG_MODE'] = selectedEmployee && debug ? 'T' : 'F';
       u['DO_NOT_LOAD_TICKETS_ON_LOAD'] = skip ? 'T' : 'F';
       if (user == Constants.userID.toString()) {
         Constants.allowDocumentDelete = selectedEmployee && deleteAllowed
@@ -247,7 +247,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
             : 'F';
         Constants.accessLevel = access.toString();
         Constants.webViewAllDeptTickets = deptTickets ? 'T' : 'F';
-        Constants.debugMode = debug ? 'T' : 'F';
+        Constants.debugMode = selectedEmployee && debug ? 'T' : 'F';
         Constants.doNotLoadTicketsOnLoad = skip ? 'T' : 'F';
       }
       if (mounted)
@@ -761,8 +761,9 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                   ),
                   SwitchListTile(
                     title: const Text('Review diagnostic logs'),
-                    value: debug,
-                    onChanged: user == null || busy
+                    subtitle: const Text('Employees only. Diagnostic files may include multiple customers.'),
+                    value: selectedEmployee && debug,
+                    onChanged: user == null || busy || !selectedEmployee
                         ? null
                         : (v) => setState(() => debug = v),
                   ),

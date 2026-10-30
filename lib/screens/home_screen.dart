@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 20),
                     ],
-                    if (Constants.isDebugModeEnabled) ...[
+                    if (Constants.canDownloadDiagnosticLogs) ...[
                       _buildMainButton(
                         icon: Icons.download_for_offline_outlined,
                         label: 'Download Diagnostic Log',
@@ -304,6 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _downloadDiagnosticLog() async {
+    if (!Constants.canDownloadDiagnosticLogs) return;
     try {
       final choice = await showDialog<String>(
         context: context,

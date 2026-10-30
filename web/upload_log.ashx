@@ -156,6 +156,24 @@ public class UploadLogHandler : IHttpHandler
 
         var serializer = new JavaScriptSerializer();
         string configPath = context.Server.MapPath("~/config.json");
+        // The service below validates this same bearer token. Do not allow
+        // callers to substitute an employee ID for their own account.
+        try
+        {
+            string[] parts = authorization.Substring(7).Trim().Split('.');
+            if (parts.Length != 3) throw new FormatException();
+            string payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight((payload.Length + 3) / 4 * 4, '=');
+            var claims = serializer.DeserializeObject(Encoding.UTF8.GetString(Convert.FromBase64String(payload))) as IDictionary;
+            int actor;
+            if (claims == null || !claims.Contains("anid") ||
+                !int.TryParse(Convert.ToString(claims["anid"]), out actor) || actor != userID)
+                throw new FormatException();
+        }
+        catch
+        {
+            throw new UnauthorizedAccessException("Diagnostic download requires your own authenticated employee account.");
+        }
         if (!File.Exists(configPath))
             throw new UnauthorizedAccessException("Service configuration is unavailable.");
 
@@ -172,14 +190,20 @@ public class UploadLogHandler : IHttpHandler
         {
             client.Headers[HttpRequestHeader.Authorization] = authorization;
             client.Headers[HttpRequestHeader.Accept] = "application/json";
-            response = client.DownloadString(userInfoUrl);
+            try { response = client.DownloadString(userInfoUrl); }
+            catch (WebException) { throw new UnauthorizedAccessException("Unable to verify diagnostic download permission."); }
         }
 
         var userInfo = serializer.DeserializeObject(response) as IDictionary;
+        string userType = userInfo != null && userInfo.Contains("USER_TYPE")
+            ? Convert.ToString(userInfo["USER_TYPE"]).Trim() : "";
+        if (!string.Equals(userType, "EMPLOYEE", StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Diagnostic downloads are available to employees only.");
         string mode = userInfo != null && userInfo.Contains("DEBUG_MODE")
             ? Convert.ToString(userInfo["DEBUG_MODE"])
             : "N";
-        if (!string.Equals(mode, "T", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(mode.Trim(), "T", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(mode.Trim(), "Y", StringComparison.OrdinalIgnoreCase))
             throw new UnauthorizedAccessException("Diagnostic download is not enabled for this account.");
     }
 

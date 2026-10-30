@@ -68,6 +68,7 @@ class Constants {
   static bool get isProd => buildEnv.toLowerCase() == 'prod';
   static bool get isPortalAdmin => num.tryParse(accessLevel.trim()) == 2;
   static bool get isEmployee => userType.trim().toUpperCase() == 'EMPLOYEE';
+  static bool get canDownloadDiagnosticLogs => isEmployee && isDebugModeEnabled;
   static bool get isDebugModeEnabled =>
       const ['T', 'Y'].contains(debugMode.trim().toUpperCase());
 
