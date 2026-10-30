@@ -191,7 +191,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     _buildMainButton(
                       icon: Icons.menu_book,
-                      label: 'Download User Manual',
+                      label: Constants.isEmployee
+                          ? 'Download User and Employee Manuals'
+                          : 'Download User Manual',
                       onTap: () async {
                         await FileDownloadHelper.downloadUserManual(context);
                         await WebLogHelper.log(

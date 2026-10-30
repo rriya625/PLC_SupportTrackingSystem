@@ -1,4 +1,6 @@
+import 'upload_result.dart';
 import 'package:ticket_tracker_app/utils/diagnostic_http_client.dart';
+
 /// ⚠️ This file is for Flutter Web only.
 /// Do NOT import this file on iOS or Android.
 /// Use `kIsWeb` to conditionally call this code.
@@ -13,83 +15,86 @@ import 'dart:async';
 import '../constants.dart';
 import 'package:ticket_tracker_app/utils/dialogs.dart';
 
+Future<Uint8List> _readUploadFile(html.File file) async {
+  final reader = html.FileReader();
+  final done = Completer<Uint8List>();
+  reader.onLoad.listen((_) {
+    final value = reader.result;
+    if (value is Uint8List) {
+      if (!done.isCompleted) done.complete(value);
+    } else if (value is ByteBuffer) {
+      if (!done.isCompleted) done.complete(value.asUint8List());
+    } else if (!done.isCompleted) {
+      done.completeError(
+        Exception('Could not read ${file.name}. Please select the file again.'),
+      );
+    }
+  });
+  reader.onError.listen((_) {
+    if (!done.isCompleted)
+      done.completeError(
+        Exception(
+          'Could not read ${file.name}. ${reader.error?.message ?? "Please select the file again."}',
+        ),
+      );
+  });
+  reader.onAbort.listen((_) {
+    if (!done.isCompleted)
+      done.completeError(
+        Exception('Reading ${file.name} was interrupted. Please try again.'),
+      );
+  });
+  reader.readAsArrayBuffer(file);
+  try {
+    final bytes = await done.future.timeout(const Duration(seconds: 90));
+    if (bytes.isEmpty)
+      throw Exception('${file.name} is empty and cannot be uploaded.');
+    return bytes;
+  } on TimeoutException {
+    reader.abort();
+    throw Exception(
+      'Reading ${file.name} timed out. Make sure the file is downloaded to your phone, then try again.',
+    );
+  }
+}
+
 Future<void> pickAndUploadFilesWeb({
   required BuildContext context,
   required int ticketKey,
 }) async {
-  final input = html.FileUploadInputElement();
-  input.multiple = true;
-  input.accept = '*/*';
-  input.click();
-
-  input.onChange.listen((event) async {
+  final input = html.FileUploadInputElement()
+    ..multiple = true
+    ..accept = '*/*';
+  input.style.display = 'none';
+  html.document.body?.append(input);
+  input.onChange.listen((_) async {
     final files = input.files;
     if (files == null || files.isEmpty) {
-      print("❌ No files selected");
+      input.remove();
       return;
     }
-
-    showUploadSpinner('Uploading...'); // ✅ Use platform-safe spinner
-
+    String message;
+    showUploadSpinner('Preparing files...');
     try {
-      final List<Map<String, dynamic>> fileData = [];
-
+      final data = <Map<String, dynamic>>[];
       for (final file in files) {
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        await reader.onLoad.first;
-
-        final Uint8List fileBytes = reader.result as Uint8List;
-        final base64String = base64Encode(fileBytes);
-
-        fileData.add({'sFileName': file.name, 'Base64Content': base64String});
-
-        print("📤 Prepared file: ${file.name}, size: ${file.size}");
+        final bytes = await _readUploadFile(file);
+        data.add({
+          'sFileName': file.name,
+          'Base64Content': base64Encode(bytes),
+        });
       }
-
-      final requestBody = {
-        'TicketKey': ticketKey,
-        'ProspectKey': Constants.userID,
-        'FileList': fileData,
-      };
-
-      final uri = Uri.parse('${Constants.baseUrlData}UploadFiles');
-      print("📤 Uploading to: $uri");
-
-      final response = await diagnosticHttpClient.post(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${Constants.accessToken}',
-        },
-        body: jsonEncode(requestBody),
-      );
-
-      debugPrint("Upload response status: ${response.statusCode}");
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body);
-        final code = json['Code'];
-        final msg = json['Message'];
-        print("✅ Upload Status: $code, Message: $msg");
-
-        if (json['Code'].toString() == '300') {
-          //hideUploadSpinner();
-          await showMessageDialog(context, 'Upload Completed ✅');
-        } else {
-          //hideUploadSpinner();
-          await showMessageDialog(context, 'Upload failed: ${json['Message']}');
-        }
-      } else {
-        print("❌ Upload failed: ${response.reasonPhrase}");
-      }
-    } catch (e) {
-      print("❌ Exception during upload: $e");
+      await uploadPickedFilesWeb(ticketKey, data);
+      message = 'Documents uploaded successfully.';
+    } catch (error) {
+      message = 'Documents were not uploaded. $error';
     } finally {
-      /*loadingDiv.remove();*/
-      hideUploadSpinner(); // ✅ Hide spinner regardless of result
+      hideUploadSpinner();
+      input.remove();
     }
+    if (context.mounted) await showMessageDialog(context, message);
   });
+  input.click();
 }
 
 void downloadImage(BuildContext context, String fileName, Uint8List data) {
@@ -126,28 +131,7 @@ void pickFilesForWeb({
 
     try {
       for (final file in files) {
-        final reader = html.FileReader();
-        final completer = Completer<Uint8List>();
-
-        reader.onLoad.listen((event) {
-          final result = reader.result;
-          if (result is Uint8List) {
-            completer.complete(result);
-          } else if (result is ByteBuffer) {
-            completer.complete(result.asUint8List());
-          } else {
-            completer.completeError('Unsupported browser file result');
-          }
-        });
-        reader.onError.listen((event) {
-          completer.completeError('File read error');
-        });
-        reader.onAbort.listen((event) {
-          completer.completeError('File read aborted');
-        });
-
-        reader.readAsArrayBuffer(file);
-        final fileBytes = await completer.future;
+        final fileBytes = await _readUploadFile(file);
         final base64 = base64Encode(fileBytes);
 
         pendingFiles.add({
@@ -158,7 +142,13 @@ void pickFilesForWeb({
         });
       }
     } catch (e) {
-      print('Error reading file(s): $e');
+      hideUploadSpinner();
+      final context = rootNavigatorKey.currentContext;
+      if (context != null && context.mounted)
+        await showMessageDialog(
+          context,
+          'Could not attach the selected file. $e',
+        );
     } finally {
       hideUploadSpinner();
       updateUI();
@@ -186,27 +176,23 @@ Future<void> uploadPickedFilesWeb(
       'FileList': files,
     };
 
-    final response = await diagnosticHttpClient.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${Constants.accessToken}', // ✅ Auth added
-      },
-      body: jsonEncode(requestBody),
-    );
+    final response = await diagnosticHttpClient
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ${Constants.accessToken}', // ✅ Auth added
+          },
+          body: jsonEncode(requestBody),
+        )
+        .timeout(
+          const Duration(minutes: 2),
+          onTimeout: () => throw Exception(
+            'Upload timed out. Check the Documents list before retrying to avoid duplicates.',
+          ),
+        );
 
-    debugPrint("Upload response status: ${response.statusCode}");
-
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
-      final code = json['Code'];
-      final msg = json['Message'];
-      print("✅ Upload Status: $code, Message: $msg");
-    } else {
-      print("❌ Upload failed: ${response.reasonPhrase}");
-    }
-  } catch (e) {
-    print("❌ Exception during upload: $e");
+    validateUploadResponse(response.statusCode, response.body);
   } finally {
     hideUploadSpinner(); // ✅ Hide spinner regardless of success/failure
   }
