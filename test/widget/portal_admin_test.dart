@@ -6,6 +6,8 @@ import 'package:ticket_tracker_app/screens/portal_admin_screen.dart';
 import 'package:ticket_tracker_app/utils/messages_api.dart';
 
 class FakeAdminApi extends MessagesApi {
+  final String? userAccess;
+  FakeAdminApi({this.userAccess = '2'});
   final calls = <String>[];
   Map<String, dynamic>? saved;
   @override
@@ -32,7 +34,7 @@ class FakeAdminApi extends MessagesApi {
             'DEPARTMENT': 'PLC',
             'USER_TYPE': 'EMPLOYEE',
             'ALLOW_DOCUMENT_DELETE': 'T',
-            'ACCESS_LEVEL': '2',
+            'ACCESS_LEVEL': userAccess,
             'ACCOUNT_DISABLED': 'F',
             'WEB_VIEW_ALL_DEPT_TICKETS': 'F',
             'DEBUG_MODE': 'T',
@@ -60,6 +62,22 @@ void main() {
     expect(api.saved, isNull);
     Constants.qbLinkKey = '';
   });
+  for (final level in <String?>[null, '', '0', '1']) {
+    testWidgets('Portal User is selected for access $level', (tester) async {
+      Constants.accessLevel = '2';
+      Constants.userID = 12819;
+      Constants.qbLinkKey = 'QBPLC';
+      final api = FakeAdminApi(userAccess: level);
+      await tester.pumpWidget(MaterialApp(home: PortalAdminScreen(api: api)));
+      await tester.pumpAndSettle();
+      final field = tester.widget<DropdownButtonFormField<int>>(find.byType(DropdownButtonFormField<int>));
+      expect(field.initialValue, 1);
+      expect(find.text('Portal User'), findsWidgets);
+      expect(find.text('0'), findsNothing);
+      expect(api.saved, isNull);
+      Constants.qbLinkKey = '';
+    });
+  }
   testWidgets('Non-admin cannot load user flags', (tester) async {
     Constants.accessLevel = '0';
     final api = FakeAdminApi();

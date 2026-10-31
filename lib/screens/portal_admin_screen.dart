@@ -33,7 +33,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       enabled = true,
       selectedEmployee = false,
       deleteAllowed = false;
-  int access = 0, invalidCount = 0;
+  int access = 1, invalidCount = 0;
   String? error, notice;
   DateTime from = DateTime.now().subtract(const Duration(days: 7)),
       to = DateTime.now();
@@ -166,7 +166,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       enabled = true;
       selectedEmployee = false;
       deleteAllowed = false;
-      access = 0;
+      access = 1;
       invalidCount = 0;
       users = [];
       userSearch.clear();
@@ -203,7 +203,7 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
         deleteAllowed =
             selectedEmployee &&
             ['T', 'Y'].contains(u['ALLOW_DOCUMENT_DELETE']?.toString());
-        access = int.tryParse(u['ACCESS_LEVEL']?.toString() ?? '') ?? 0;
+        access = int.tryParse(u['ACCESS_LEVEL']?.toString() ?? '') == 2 ? 2 : 1;
         invalidCount =
             int.tryParse(u['INVALID_LOGIN_COUNT']?.toString() ?? '') ?? 0;
         enabled = ![
@@ -700,13 +700,12 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
                 ] else ...[
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
-                    value: [0, 1, 2].contains(access) ? access : 0,
+                    value: access == 2 ? 2 : 1,
                     decoration: const InputDecoration(
                       labelText: 'Access Level',
                     ),
                     items: const [
-                      DropdownMenuItem(value: 0, child: Text('0')),
-                      DropdownMenuItem(value: 1, child: Text('1')),
+                      DropdownMenuItem(value: 1, child: Text('Portal User')),
                       DropdownMenuItem(
                         value: 2,
                         child: Text('2 - Portal administrator'),
