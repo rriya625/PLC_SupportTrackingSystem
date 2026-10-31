@@ -1,5 +1,7 @@
 import '../widgets/portal_app_bar.dart';
 import 'dart:typed_data';
+import '../widgets/video_preview_stub.dart'
+    if (dart.library.html) '../widgets/video_preview_web.dart';
 
 import 'package:flutter/material.dart';
 import 'package:ticket_tracker_app/utils/document_bytes.dart';
@@ -240,7 +242,8 @@ class _DocumentPreviewState extends State<_DocumentPreview>
   bool saving = false;
   String? downloadError;
   String get name => widget.document['FileName']?.toString() ?? 'Unnamed file';
-  bool get supportsPreview => RegExp(
+  bool get isVideo => RegExp(r'\.(mov|mp4|m4v|webm|ogv)$', caseSensitive: false).hasMatch(name);
+  bool get supportsPreview => isVideo || RegExp(
     r'\.(png|jpe?g|gif|webp|bmp)$',
     caseSensitive: false,
   ).hasMatch(name);
@@ -346,6 +349,8 @@ class _DocumentPreviewState extends State<_DocumentPreview>
                           ),
                         ),
                       )
+                    else if (isVideo)
+                      VideoPreview(bytes: data, fileName: name, height: widget.previewHeight)
                     else
                       _unsupported(),
                   ],

@@ -78,12 +78,21 @@ class _PortalAdminScreenState extends State<PortalAdminScreen> {
       loading = false;
       if (!Constants.isPortalAdmin) error = 'Access Level 2 is required.';
     });
-    if (Constants.isPortalAdmin && customerLocked) {
+    if (Constants.isPortalAdmin && (!widget.audit || customerLocked)) {
       await loadCustomers();
-      if (!mounted || customers.isEmpty) return;
-      final own = customers.first;
+      if (!mounted) return;
+      final matches = customers.where(
+        (c) => c['CODE'].toString() == Constants.qbLinkKey,
+      );
+      if (matches.isEmpty) return;
+      final own = matches.first;
       customerSearch.text = customerLabel(own);
       await selectCustomer(own['CODE'].toString());
+      if (!mounted || widget.audit) return;
+      final ownUsers = users.where(
+        (u) => u['ID'].toString() == Constants.userID.toString(),
+      );
+      if (ownUsers.isNotEmpty) selectUser(Constants.userID.toString());
     }
   }
 

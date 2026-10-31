@@ -48,6 +48,18 @@ class FakeAdminApi extends MessagesApi {
 void main() {
   setUp(() => Constants.userType = "EMPLOYEE");
   tearDown(() => Constants.accessLevel = '');
+  testWidgets('User Flags selects the signed-in account and loads its flags', (tester) async {
+    Constants.accessLevel = '2';
+    Constants.userID = 12819;
+    Constants.qbLinkKey = 'QBPLC';
+    final api = FakeAdminApi();
+    await tester.pumpWidget(MaterialApp(home: PortalAdminScreen(api: api)));
+    await tester.pumpAndSettle();
+    expect(find.text('12819 - Muru - PLC'), findsOneWidget);
+    expect(api.calls, contains('GetPortalContacts'));
+    expect(api.saved, isNull);
+    Constants.qbLinkKey = '';
+  });
   testWidgets('Non-admin cannot load user flags', (tester) async {
     Constants.accessLevel = '0';
     final api = FakeAdminApi();
@@ -65,7 +77,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: PortalAdminScreen(api: api)));
     await tester.pumpAndSettle();
     expect(api.calls, isNot(contains('GetPortalContacts')));
-    expect(api.calls, isEmpty);
+    expect(api.calls, contains('GetPortalCustomers'));
     await tester.tap(find.byKey(const ValueKey('customerLookup')));
     await tester.pumpAndSettle();
     expect(api.calls, contains('GetPortalCustomers'));
@@ -123,6 +135,7 @@ void main() {
       tester,
     ) async {
       Constants.userType = 'CUSTOMER';
+      Constants.qbLinkKey = 'QBPLC';
       Constants.accessLevel = '2';
       final api = FakeAdminApi();
       await tester.pumpWidget(
