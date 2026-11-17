@@ -29,6 +29,27 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
   bool _loadingPriorities = true;
   List<Map<String, dynamic>> _pendingWebFiles = [];
   String _selectedPriority = 'Normal';
+  String _customerCode = Constants.qbLinkKey;
+  String _customerName = Constants.departmentName;
+  bool _loadingCustomers = false;
+  List<Map<String, String>>? _customers;
+
+  final _customerController = TextEditingController(
+    text: '${Constants.qbLinkKey} - ${Constants.departmentName}',
+  );
+  Future<void> _loadCustomers() async {
+    if (_customers != null || _loadingCustomers) return;
+    setState(() => _loadingCustomers = true);
+    try {
+      final customers = await APIHelper.getCodeList('CUSTOMER');
+      if (mounted) setState(() => _customers = customers);
+    } catch (e) {
+      if (mounted)
+        await showMessageDialog(context, 'Unable to load customers: $e');
+    } finally {
+      if (mounted) setState(() => _loadingCustomers = false);
+    }
+  }
 
   final _shortDescController = TextEditingController();
   final _detailedDescController = TextEditingController();
@@ -269,6 +290,47 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                   child: Column(
                     children: [
                       // Priority Dropdown
+                      if (Constants.isEmployee) ...[
+                        Listener(
+                          onPointerDown: (_) => _loadCustomers(),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) =>
+                                DropdownMenu<String>(
+                                  width: constraints.maxWidth,
+                                  controller: _customerController,
+                                  label: Text(
+                                    _loadingCustomers
+                                        ? 'Loading customers...'
+                                        : 'Customer',
+                                  ),
+                                  enableFilter: true,
+                                  requestFocusOnTap: true,
+                                  menuHeight: 300,
+                                  onSelected: (code) {
+                                    if (code == null) return;
+                                    setState(() {
+                                      _customerCode = code;
+                                      _customerName =
+                                          _customers!.firstWhere(
+                                            (e) => e['Code'] == code,
+                                          )['Description'] ??
+                                          code;
+                                    });
+                                  },
+                                  dropdownMenuEntries: (_customers ?? [])
+                                      .map(
+                                        (e) => DropdownMenuEntry(
+                                          value: e['Code']!,
+                                          label:
+                                              '${e['Code']} - ${e['Description']}',
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       _buildDropdownField(
                         label: 'Priority',
                         value: _selectedPriority,
@@ -503,7 +565,9 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
                             final confirmationTo = _confirmationToController
                                 .text
                                 .trim();
-                            final qbLinkKey = Constants.qbLinkKey;
+                            final qbLinkKey = Constants.isEmployee
+                                ? _customerCode
+                                : Constants.qbLinkKey;
                             final userId = Constants.userID;
                             final sharepointLink = _customerSharepointLink.text
                                 .trim();
@@ -1230,6 +1294,7 @@ class _ReportIssueScreenState extends State<ReportIssueScreen> {
 
   @override
   void dispose() {
+    _customerController.dispose();
     _shortDescFocus.dispose();
     _shortDescController.dispose();
     _detailedDescController.dispose();

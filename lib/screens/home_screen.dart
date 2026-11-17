@@ -1,4 +1,6 @@
-import 'portal_admin_screen.dart';
+import 'downloads_screen.dart';
+import 'work_summary_screen.dart';
+import 'portal_admin_menu_screen.dart';
 import '../widgets/message_popup.dart';
 import '../widgets/portal_app_bar.dart';
 import 'package:flutter/services.dart';
@@ -139,6 +141,43 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 20),
                     _buildMainButton(
+                      icon: Icons.insights,
+                      label: 'Activity Summary',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const WorkSummaryScreen(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildMainButton(
+                      icon: Icons.download,
+                      label: 'Downloads',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DownloadsScreen(
+                            diagnostics: _downloadDiagnosticLog,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (Constants.isPortalAdmin) ...[
+                      _buildMainButton(
+                        icon: Icons.admin_panel_settings_outlined,
+                        label: 'Portal Admin',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PortalAdminMenuScreen(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    _buildMainButton(
                       icon: Icons.phone,
                       label: 'Call Support',
                       onTap: _launchCall,
@@ -157,51 +196,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    if (Constants.isPortalAdmin) ...[
-                      _buildMainButton(
-                        icon: Icons.manage_accounts,
-                        label: 'User Flags',
-                        onTap: () => showMessagePopup(
-                          context,
-                          builder: (_) => const PortalAdminScreen(),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      _buildMainButton(
-                        icon: Icons.history,
-                        label: 'Activity Audit',
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const PortalAdminScreen(audit: true),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                    if (Constants.canDownloadDiagnosticLogs) ...[
-                      _buildMainButton(
-                        icon: Icons.download_for_offline_outlined,
-                        label: 'Download Diagnostic Log',
-                        onTap: _downloadDiagnosticLog,
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-
-                    _buildMainButton(
-                      icon: Icons.menu_book,
-                      label: Constants.isEmployee
-                          ? 'Download User and Employee Manuals'
-                          : 'Download User Manual',
-                      onTap: () async {
-                        await FileDownloadHelper.downloadUserManual(context);
-                        await WebLogHelper.log(
-                          "User attempted manual download",
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
                     _buildMainButton(
                       icon: Icons.logout,
                       label: 'Logout',

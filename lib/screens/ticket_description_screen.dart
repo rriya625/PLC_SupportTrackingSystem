@@ -39,9 +39,13 @@ class _TicketDescriptionScreenState
   bool _loading = true;
   String? _loadError;
   String ticketNumber = '';
+  String agencyName = '';
   String dateCreated = '';
   String assignedTo = '';
   String currentStatus = '';
+  String ticketGroup = '';
+  String lastStatusDate = '';
+  String lastStatusBy = '';
   String shortDescription = '';
   String longDescription = '';
   String customerReference = '';
@@ -71,9 +75,13 @@ class _TicketDescriptionScreenState
           if (data != null && mounted) {
             setState(() {
               ticketNumber = data['TicketKey'] ?? '';
+              agencyName = data['AgencyName']?.toString() ?? '';
               dateCreated = data['StartDate'] ?? '';
               assignedTo = data['EmployeeName'] ?? 'N/A';
               currentStatus = _statusDisplay(data['Status']);
+              ticketGroup = data['TicketGroup']?.toString() ?? '';
+              lastStatusDate = data['LastStatusDate']?.toString() ?? '';
+              lastStatusBy = data['LastStatusBy']?.toString() ?? '';
               shortDescription = data['ShortDesc'] ?? '';
               longDescription = _parseRtf(data['LongDesc'] ?? '');
               _originalShortDescription = data['ShortDesc']?.toString() ?? '';
@@ -177,10 +185,18 @@ class _TicketDescriptionScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildField('Ticket Number:', ticketNumber),
+                  _buildField(
+                    'Ticket Number:',
+                    Constants.isEmployee && agencyName.isNotEmpty
+                        ? '$ticketNumber - $agencyName'
+                        : ticketNumber,
+                  ),
                   _buildField('Date Created:', dateCreated),
                   _buildField('Assigned to:', assignedTo),
                   _buildField('Current Status:', currentStatus),
+                  _buildField('Ticket Group:', ticketGroup),
+                  _buildField('Last Status Date:', lastStatusDate),
+                  _buildField('Last Status By:', lastStatusBy),
                   //const SizedBox(height: 2),  //12
                   // New description section with larger box and row header
                   Row(

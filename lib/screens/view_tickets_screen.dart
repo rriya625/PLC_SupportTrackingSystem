@@ -540,7 +540,7 @@ class _ViewTicketsScreenState extends State<ViewTicketsScreen> {
                             child: _buildTicketCard(
                               ticketKey: ticket['TicketKey'] ?? '',
                               date:
-                                  'Start Date: ${ticket['StartDate'] ?? ''}   Last Activity Date: ${ticket['LastStatusDate'] ?? ''}',
+                                  'Start Date: ${ticket['StartDate'] ?? ''}\nTicket Group: ${ticket['TicketGroup'] ?? ''}\nLast Status Date: ${ticket['LastStatusDate'] ?? ''}\nLast Status By: ${ticket['LastStatusBy'] ?? ''}',
                               shortDesc: ticket['ShortDesc'] ?? '',
                             ),
                           );
